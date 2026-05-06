@@ -31,8 +31,9 @@ const App: React.FC = () => {
       const nextView = getViewFromHash(window.location.hash)
       if (nextView === null) return // lobby/classic managed via direct state
       setActiveView(prev => {
-        if (nextView !== prev) {
-          setTimeout(() => forceReset(nextView === 'tournament-play'), 0)
+        // Only reset for tournament-play; classic game is preserved across other view changes.
+        if (nextView === 'tournament-play' && nextView !== prev) {
+          setTimeout(() => forceReset(true), 0)
         }
         return nextView
       })
@@ -61,13 +62,12 @@ const App: React.FC = () => {
 
   const handleNavigate = (view: AppView, clearTournament: boolean = true) => {
     if (view === 'lobby') {
-      // Clear any leftover hash then update state directly
+      // Clear any leftover hash then update state directly.
+      // Do NOT forceReset — preserves active classic game so the player can return.
       if (window.location.hash) history.replaceState(null, '', window.location.pathname)
-      forceReset()
       setActiveView('lobby')
     } else if (view === 'classic') {
       if (clearTournament) setTournamentId(null)
-      forceReset()
       setActiveView('classic')
       // No hash change — refresh always returns to lobby
     } else if (view === 'tournaments') {

@@ -1,3 +1,5 @@
+import type { MoveRecord } from '../engine/game'
+
 export const CLASSIC_SESSION_STORAGE_KEY = 'blokaz_classic_session'
 export const TOURNAMENT_SESSION_STORAGE_KEY = 'blokaz_tournament_session'
 
@@ -8,6 +10,7 @@ export interface StoredGameSession {
   gameId: string | null
   contractAddress: `0x${string}`
   tournamentId?: string | null
+  snapshot?: { moveHistory: MoveRecord[] }
 }
 
 export function readStoredGameSession(

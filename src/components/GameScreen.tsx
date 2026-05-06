@@ -6,6 +6,8 @@ import { PieceRenderer } from '../canvas/PieceRenderer'
 import { TouchController } from '../canvas/TouchController'
 import { AnimationManager } from '../canvas/AnimationManager'
 import { Grid } from '../engine/grid'
+import { GameSession } from '../engine/game'
+import type { MoveRecord } from '../engine/game'
 import { SHAPES, TOTAL_WEIGHT } from '../engine/shapes'
 import type { ShapeDefinition } from '../engine/shapes'
 import ScoreBar from './ScoreBar'
@@ -37,6 +39,14 @@ import { IS_MINIPAY } from '../utils/miniPay'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function replayMoveHistory(seed: bigint, history: MoveRecord[]): GameSession {
+  const session = new GameSession(seed)
+  for (const move of history) {
+    session.placePiece(move.pieceIndex, move.row, move.col)
+  }
+  return session
+}
 
 interface GameScreenProps {
   onOpenLeaderboard?: () => void
@@ -580,7 +590,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
           encodePacked(['bytes32', 'address'], [latestSeed, address])
         ).slice(0, 18)
       )
-      startGame(localSeed, true)
+      const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
+      if (stored?.snapshot?.moveHistory?.length) {
+        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+        useGameStore.setState({
+          gameSession: restoredSession,
+          score: restoredSession.score,
+          comboStreak: restoredSession.comboStreak,
+          currentPieces: [...restoredSession.currentPieces],
+          isGameOver: restoredSession.isGameOver,
+        })
+      } else {
+        startGame(localSeed, true)
+      }
       return
     }
     const dummyAddr = address || ZERO_ADDRESS
@@ -743,6 +765,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
             y: gridRenderer.currentGridSize * 0.45,
             score: result.scoreEvent.totalPoints,
           })
+        }
+        // Persist board state so a browser refresh can replay moves and restore progress.
+        const updatedSession = useGameStore.getState().gameSession
+        if (updatedSession) {
+          const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          if (raw) {
+            try {
+              const entry = JSON.parse(raw)
+              entry.snapshot = { moveHistory: updatedSession.moveHistory }
+              localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+            } catch {}
+          }
         }
       },
       (shape: ShapeDefinition, row: number, col: number) => {
