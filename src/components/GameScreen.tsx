@@ -866,6 +866,28 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const handlePlayAgain = () => handleStartGame()
 
+  // Detect a saved game the user can resume (snapshot in localStorage)
+  const hasStoredGame = !gameSession && !!address && !!(
+    readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
+  )
+
+  const continueGame = () => {
+    if (!address) return
+    const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
+    if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
+    const localSeed = BigInt(stored.hash.slice(0, 18))
+    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+    // TouchController reads window.currentPieces for hit-testing — must match the session
+    ;(window as any).currentPieces = restoredSession.currentPieces
+    useGameStore.setState({
+      gameSession: restoredSession,
+      score: restoredSession.score,
+      comboStreak: restoredSession.comboStreak,
+      currentPieces: [...restoredSession.currentPieces],
+      isGameOver: restoredSession.isGameOver,
+    })
+  }
+
   const isMiniPayConnecting = IS_MINIPAY && !isConnected
 
   const commonCanvasProps = {
@@ -890,6 +912,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
     setSessionConflict,
     onOpenLeaderboard,
     startGameError,
+    hasStoredGame,
+    continueGame,
   }
 
   const canvasArea = (
@@ -1023,6 +1047,8 @@ interface CanvasAreaProps {
   setSessionConflict: (v: boolean) => void
   onOpenLeaderboard?: () => void
   startGameError?: Error | null
+  hasStoredGame: boolean
+  continueGame: () => void
 
   // GoodDollar Props
   gModeEnabled: boolean
@@ -1045,6 +1071,8 @@ const ClassicStartCard: React.FC<{
   forceReset: () => void
   setSessionConflict: (v: boolean) => void
   startGameError?: Error | null
+  hasStoredGame: boolean
+  continueGame: () => void
 
   // GoodDollar Props
   gModeEnabled: boolean
@@ -1065,6 +1093,8 @@ const ClassicStartCard: React.FC<{
   forceReset,
   setSessionConflict,
   startGameError,
+  hasStoredGame,
+  continueGame,
   gModeEnabled,
   setGModeEnabled,
   isWhitelisted,
@@ -1122,6 +1152,18 @@ const ClassicStartCard: React.FC<{
       </span>{' '}
       RUN?
     </div>
+    {/* CONTINUE GAME — shown when a saved game snapshot exists */}
+    {hasStoredGame && (
+      <button
+        onClick={continueGame}
+        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting}
+        className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
+        style={{ color: 'var(--ink-fixed)' }}
+      >
+        ▶ CONTINUE GAME
+      </button>
+    )}
+
     <button
       onClick={handleStartGame}
       disabled={
@@ -1131,7 +1173,9 @@ const ClassicStartCard: React.FC<{
         isMiniPayConnecting ||
         sessionConflict
       }
-      className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
+      className={`brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70 ${
+        hasStoredGame ? 'bg-paper-2' : 'bg-accent-lime'
+      }`}
       style={{ color: 'var(--ink-fixed)' }}
     >
       {isMiniPayConnecting ? (
@@ -1146,6 +1190,8 @@ const ClassicStartCard: React.FC<{
         </>
       ) : sessionConflict ? (
         'SESSION CONFLICT'
+      ) : hasStoredGame ? (
+        'START NEW GAME'
       ) : (
         'START CLASSIC GAME'
       )}
@@ -1418,6 +1464,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   setSessionConflict,
   onOpenLeaderboard,
   startGameError,
+  hasStoredGame,
+  continueGame,
   gModeEnabled,
   setGModeEnabled,
   isWhitelisted,
@@ -1438,6 +1486,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         forceReset={forceReset}
         setSessionConflict={setSessionConflict}
         startGameError={startGameError}
+        hasStoredGame={hasStoredGame}
+        continueGame={continueGame}
         gModeEnabled={gModeEnabled}
         setGModeEnabled={setGModeEnabled}
         isWhitelisted={isWhitelisted}
