@@ -29,26 +29,6 @@ export default defineConfig({
       'all',
     ],
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules/@web3auth') || id.includes('node_modules/@toruslabs')) {
-            return 'vendor-web3auth'
-          }
-          if (id.includes('node_modules/wagmi') || id.includes('node_modules/viem') || id.includes('node_modules/@wagmi')) {
-            return 'vendor-wagmi'
-          }
-          if (id.includes('node_modules/@tanstack')) {
-            return 'vendor-query'
-          }
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/scheduler')) {
-            return 'vendor-react'
-          }
-        },
-      },
-    },
-  },
   // @ts-ignore - vitest types
   test: {
     globals: true,

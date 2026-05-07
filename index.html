@@ -39,17 +39,116 @@
     <meta name="talentapp:project_verification" content="90311590842b835040b6ea565b383a5eff96a4c7c26ceaddababe71e0a74d4eed6bc70f989070703284e868f4936a2bf4ee8aef92d07c358ea9df10032d3ab6f" />
     <title>BLOKAZ — Stack. Smash. Stake.</title>
     <meta name="description" content="Blokaz is a block-stacking puzzle game on Celo. Play free, climb the weekly leaderboard, and stake with GoodDollar. Available on MiniPay." />
-    <!-- Preload LCP image so browser fetches it before JS executes -->
+    <!-- Preload LCP image — browser fetches before JS executes -->
     <link rel="preload" as="image" href="/Blokaz_logo.webp" type="image/webp" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Non-blocking font load: loads as print stylesheet then swaps to all media -->
+    <link rel="preconnect" href="https://assets.web3auth.io" crossorigin />
+    <link rel="preconnect" href="https://api.web3auth.io" crossorigin />
+    <link rel="preconnect" href="https://celo-mainnet.infura.io" crossorigin />
+    <!-- Non-blocking font load -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" /></noscript>
+    <!-- Static splash shell — mirrors SplashScreen.tsx, shown before React boots -->
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      body{background:#111111}
+      #static-splash{
+        position:fixed;inset:0;z-index:9999;
+        background:#111111;
+        display:flex;flex-direction:column;
+        align-items:center;justify-content:center;
+        transition:opacity 0.5s ease;
+      }
+      #static-splash.hide{opacity:0;pointer-events:none}
+      #static-splash .grid-bg{
+        position:absolute;inset:0;pointer-events:none;
+        background-image:linear-gradient(#FFE60018 1px,transparent 1px),linear-gradient(90deg,#FFE60018 1px,transparent 1px);
+        background-size:36px 36px;
+      }
+      #static-splash .card{
+        position:relative;
+        width:min(88vw,400px);
+        display:flex;flex-direction:column;align-items:center;
+      }
+      #static-splash .bar{
+        width:100%;background:#FFE600;
+        border:4px solid #111111;border-bottom:none;
+        padding:7px 14px;
+        display:flex;align-items:center;justify-content:space-between;
+      }
+      #static-splash .bar span{color:#111111;font-size:9px;letter-spacing:0.22em;font-family:sans-serif}
+      #static-splash .dots{display:flex;gap:4px}
+      #static-splash .dot{display:block;width:6px;height:6px;background:#111111}
+      #static-splash .inner{
+        width:100%;background:#111111;
+        border:4px solid #111111;
+        box-shadow:8px 8px 0 #FFE600;
+        display:flex;flex-direction:column;align-items:center;
+        padding:24px 24px 20px;gap:16px;
+      }
+      #static-splash .logo-wrap{width:65%;max-width:240px}
+      #static-splash .logo-wrap img{width:100%;height:auto;display:block}
+      #static-splash .divider{display:flex;align-items:center;gap:10px;width:100%}
+      #static-splash .divider-line{flex:1;height:2px;background:#FFE60040}
+      #static-splash .presents{color:#FFE600;font-size:9px;letter-spacing:0.28em;font-family:sans-serif}
+      #static-splash .blokaz-wrap{width:80%;max-width:280px}
+      #static-splash .blokaz-wrap img{width:100%;height:auto;display:block}
+    </style>
   </head>
   <body>
+    <!-- Static splash: visible immediately, removed when React mounts -->
+    <div id="static-splash" aria-hidden="true">
+      <div class="grid-bg"></div>
+      <div class="card">
+        <div class="bar">
+          <span>CRACKED STUDIOS</span>
+          <span class="dots">
+            <span class="dot" style="opacity:1"></span>
+            <span class="dot" style="opacity:0.65"></span>
+            <span class="dot" style="opacity:0.35"></span>
+          </span>
+        </div>
+        <div class="inner">
+          <div class="logo-wrap">
+            <img src="/crackedstudioslogo.webp" alt="Cracked Studios" width="199" height="61" />
+          </div>
+          <div class="divider">
+            <div class="divider-line"></div>
+            <span class="presents">PRESENTS</span>
+            <div class="divider-line"></div>
+          </div>
+          <div class="blokaz-wrap">
+            <img src="/Blokaz_logo.webp" alt="Blokaz" width="280" height="86" fetchpriority="high" />
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
+    <script>
+      // Remove static splash once React mounts content into #root.
+      // #root is defined above this script so getElementById works.
+      // Safety timeout at 10s removes it even if React fails to mount.
+      (function(){
+        var splash = document.getElementById('static-splash');
+        var root = document.getElementById('root');
+        if (!splash || !root) return;
+        function removeSplash() {
+          splash.classList.add('hide');
+          setTimeout(function(){ if(splash.parentNode) splash.remove(); }, 500);
+        }
+        var safety = setTimeout(removeSplash, 10000);
+        var obs = new MutationObserver(function(){
+          if (root.firstChild) {
+            clearTimeout(safety);
+            removeSplash();
+            obs.disconnect();
+          }
+        });
+        obs.observe(root, { childList: true });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

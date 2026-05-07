@@ -26,9 +26,12 @@ const getViewFromHash = (hash: string): AppView | null => {
 }
 
 const App: React.FC = () => {
-  // Show splash on every fresh page load. App only mounts once per load,
-  // so navigating between views never re-triggers it.
-  const [showSplash, setShowSplash] = useState(true)
+  // If the static HTML splash in index.html is still present when React mounts,
+  // that means it already served as the splash screen while JS was loading —
+  // skip the React SplashScreen so users don't see it twice.
+  const [showSplash, setShowSplash] = useState(
+    () => !document.getElementById('static-splash')
+  )
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
