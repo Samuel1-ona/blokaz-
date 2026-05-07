@@ -29,6 +29,28 @@ export default defineConfig({
       'all',
     ],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // Web3Auth + toruslabs: large social-login SDK — split out so the main
+          // entry stays small and these heavy modules load in parallel.
+          if (id.includes('node_modules/@web3auth') || id.includes('node_modules/@toruslabs')) {
+            return 'vendor-web3auth'
+          }
+          // wagmi + viem: separate from main so the JS execution graph parallelises
+          // downloading web3auth and wagmi simultaneously.
+          if (
+            id.includes('node_modules/wagmi') ||
+            id.includes('node_modules/viem') ||
+            id.includes('node_modules/@wagmi')
+          ) {
+            return 'vendor-wagmi'
+          }
+        },
+      },
+    },
+  },
   // @ts-ignore - vitest types
   test: {
     globals: true,
