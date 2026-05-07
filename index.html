@@ -37,10 +37,14 @@
     <link rel="icon" type="image/png" href="/Blokaz_logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="talentapp:project_verification" content="90311590842b835040b6ea565b383a5eff96a4c7c26ceaddababe71e0a74d4eed6bc70f989070703284e868f4936a2bf4ee8aef92d07c358ea9df10032d3ab6f" />
-    <title>BLOKAZ</title>
+    <title>BLOKAZ — Stack. Smash. Stake.</title>
+    <meta name="description" content="Blokaz is a block-stacking puzzle game on Celo. Play free, climb the weekly leaderboard, and stake with GoodDollar. Available on MiniPay." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <!-- Non-blocking font load: loads as print stylesheet then swaps to all media -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" /></noscript>
   </head>
   <body>
     <div id="root"></div>

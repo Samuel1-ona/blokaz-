@@ -104,10 +104,12 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onDone }) => {
         >
           {/* Cracked Studios logo */}
           <picture style={{ width: '65%', maxWidth: 240 }}>
-            <source srcSet="/crackedstudioslogo.webp" type="image/webp" />
+            <source srcSet="/crackedstudioslogo.webp" type="image/webp" width={199} height={61} />
             <img
               src="/crackedstudioslogo.png"
               alt="Cracked Studios"
+              width={199}
+              height={61}
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
           </picture>

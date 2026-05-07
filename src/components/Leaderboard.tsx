@@ -178,6 +178,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close leaderboard"
             className="brutal-btn flex h-10 w-10 items-center justify-center border-[3px] border-paper bg-paper font-display text-ink"
             style={{ boxShadow: '4px 4px 0 var(--shadow)', color: 'var(--ink)' }}
           >

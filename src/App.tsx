@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import GameScreen from './components/GameScreen'
-import TournamentGameScreen from './components/TournamentGameScreen'
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import Header from './components/Header'
-import Leaderboard from './components/Leaderboard'
-import TournamentHall from './components/TournamentHall'
-import AdminDashboard from './components/AdminDashboard'
-import LobbyScreen from './components/LobbyScreen'
 import AppFooter from './components/AppFooter'
 import SplashScreen from './components/SplashScreen'
+
+// Lazy-loaded: these are large chunks not needed on initial paint
+const GameScreen = lazy(() => import('./components/GameScreen'))
+const TournamentGameScreen = lazy(() => import('./components/TournamentGameScreen'))
+const Leaderboard = lazy(() => import('./components/Leaderboard'))
+const TournamentHall = lazy(() => import('./components/TournamentHall'))
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
+const LobbyScreen = lazy(() => import('./components/LobbyScreen'))
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
 import { IS_MINIPAY } from './utils/miniPay'
@@ -112,34 +114,38 @@ const App: React.FC = () => {
         : activeView === 'tournament-play' ? 'pt-0 min-h-screen'
         : 'min-h-screen pt-[64px] pb-20 lg:items-center lg:pb-12'
       }`}>
-        {activeView === 'lobby' ? (
-          <LobbyScreen
-            onPlayClassic={() => handleNavigate('classic')}
-            onPlayTournaments={() => handleNavigate('tournaments')}
-          />
-        ) : activeView === 'classic' ? (
-          <GameScreen
-            onOpenLeaderboard={() => setShowLeaderboard(true)}
-            onBack={() => handleNavigate('lobby')}
-          />
-        ) : activeView === 'tournaments' ? (
-          <TournamentHall
-            onBack={() => handleNavigate('lobby')}
-            onEnterMatch={() => handleNavigate('tournament-play', false)}
-          />
-        ) : activeView === 'tournament-play' ? (
-          <TournamentGameScreen
-            onBackToHall={() => handleNavigate('tournaments', false)}
-          />
-        ) : (
-          <AdminDashboard />
-        )}
+        <Suspense fallback={null}>
+          {activeView === 'lobby' ? (
+            <LobbyScreen
+              onPlayClassic={() => handleNavigate('classic')}
+              onPlayTournaments={() => handleNavigate('tournaments')}
+            />
+          ) : activeView === 'classic' ? (
+            <GameScreen
+              onOpenLeaderboard={() => setShowLeaderboard(true)}
+              onBack={() => handleNavigate('lobby')}
+            />
+          ) : activeView === 'tournaments' ? (
+            <TournamentHall
+              onBack={() => handleNavigate('lobby')}
+              onEnterMatch={() => handleNavigate('tournament-play', false)}
+            />
+          ) : activeView === 'tournament-play' ? (
+            <TournamentGameScreen
+              onBackToHall={() => handleNavigate('tournaments', false)}
+            />
+          ) : (
+            <AdminDashboard />
+          )}
+        </Suspense>
       </main>
 
-      <Leaderboard
-        isOpen={showLeaderboard}
-        onClose={() => setShowLeaderboard(false)}
-      />
+      <Suspense fallback={null}>
+        <Leaderboard
+          isOpen={showLeaderboard}
+          onClose={() => setShowLeaderboard(false)}
+        />
+      </Suspense>
 
       {/* Footer — always visible; provides ToS, Privacy, Support links (MiniPay requirement) */}
       {activeView !== 'classic' && activeView !== 'tournament-play' && (
