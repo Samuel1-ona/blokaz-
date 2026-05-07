@@ -1843,7 +1843,7 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({
   onOpenLeaderboard,
   canvasArea,
 }) => (
-  <div className="min-h-screen" style={{ background: 'var(--page)' }}>
+  <div className="w-full min-h-screen" style={{ background: 'var(--page)' }}>
     <div
       className="mx-auto grid w-full max-w-[1600px] items-start px-10 py-6"
       style={{
@@ -1866,7 +1866,7 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({
       </div>
 
       <div
-        className="w-full min-w-0"
+        className="flex flex-col w-full min-w-0"
         style={
           gameSession
             ? { height: 'calc(100vh - 240px)', minHeight: 520 }
