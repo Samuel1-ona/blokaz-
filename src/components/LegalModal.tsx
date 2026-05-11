@@ -41,7 +41,7 @@ const LegalModal: React.FC<LegalModalProps> = ({ type, onClose }) => {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[110]"
+        className="fixed inset-0 z-[210]"
         style={{ background: 'rgba(0,0,0,0.65)' }}
         onClick={onClose}
         aria-hidden="true"
@@ -52,7 +52,7 @@ const LegalModal: React.FC<LegalModalProps> = ({ type, onClose }) => {
         role="dialog"
         aria-modal="true"
         aria-label={meta.title}
-        className="fixed bottom-0 left-0 right-0 z-[120] flex flex-col"
+        className="fixed bottom-0 left-0 right-0 z-[220] flex flex-col"
         style={{
           height: type === 'about' ? 'auto' : '90dvh',
           maxHeight: '90dvh',

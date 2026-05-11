@@ -8,6 +8,7 @@ import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { web3AuthConnector } from '../config/web3auth'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
+import LegalModal, { type LegalModalType } from './LegalModal'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -149,9 +150,6 @@ const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWal
 // ─── Settings sheet ─────────────────────────────────────────────────────────
 
 const TELEGRAM_SUPPORT = 'https://t.me/+ulIKRKsI1HYxNmQ0'
-const TOS_URL = '/blokaz-terms.pdf'
-const PRIVACY_URL = '/blokaz-privacy.pdf'
-const ABOUT_URL = 'https://crackedstudios.xyz'
 
 const THEME_OPTIONS: { value: UserTheme; label: string; icon: string }[] = [
   { value: 'auto',         label: 'AUTO',   icon: 'A' },
@@ -161,6 +159,7 @@ const THEME_OPTIONS: { value: UserTheme; label: string; icon: string }[] = [
 ]
 
 const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [legalModal, setLegalModal] = React.useState<LegalModalType>(null)
   const { userTheme, setUserTheme } = useThemeStore((s) => ({
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
@@ -258,18 +257,15 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 LEGAL & SUPPORT
               </div>
               <div className="flex flex-col gap-3">
-                {[
-                  { label: 'Terms of Service',     sub: 'blokaz-terms.pdf',         href: TOS_URL },
-                  { label: 'Privacy Policy',        sub: 'blokaz-privacy.pdf',       href: PRIVACY_URL },
-                  { label: 'About Cracked Studios', sub: 'crackedstudios.xyz',       href: ABOUT_URL },
-                  { label: 'Support',               sub: 'Chat with us on Telegram', href: TELEGRAM_SUPPORT },
-                ].map(({ label, sub, href }) => (
-                  <a
+                {([
+                  { label: 'Terms of Service',     sub: 'View in-app',              modal: 'terms'   as LegalModalType },
+                  { label: 'Privacy Policy',        sub: 'View in-app',              modal: 'privacy' as LegalModalType },
+                  { label: 'About Cracked Studios', sub: 'crackedstudios.xyz',       modal: 'about'   as LegalModalType },
+                ] as const).map(({ label, sub, modal }) => (
+                  <button
                     key={label}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                    onClick={() => setLegalModal(modal)}
+                    className="flex w-full items-center justify-between border-[3px] border-ink px-5 py-4 text-left"
                     style={{
                       background: 'var(--paper-2)',
                       color: 'var(--ink)',
@@ -281,8 +277,25 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <div className="mt-0.5 font-body text-[10px]" style={{ color: 'var(--ink-soft)' }}>{sub}</div>
                     </div>
                     <span className="ml-4 text-xl opacity-40">→</span>
-                  </a>
+                  </button>
                 ))}
+                <a
+                  href={TELEGRAM_SUPPORT}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                  style={{
+                    background: 'var(--paper-2)',
+                    color: 'var(--ink)',
+                    boxShadow: '4px 4px 0 var(--shadow)',
+                  }}
+                >
+                  <div>
+                    <div className="font-display text-[12px] uppercase tracking-[0.12em]">Support</div>
+                    <div className="mt-0.5 font-body text-[10px]" style={{ color: 'var(--ink-soft)' }}>Chat with us on Telegram</div>
+                  </div>
+                  <span className="ml-4 text-xl opacity-40">→</span>
+                </a>
               </div>
             </section>
 
@@ -297,6 +310,8 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
         </div>
       </div>
+
+      <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
     </div>
   )
 }
