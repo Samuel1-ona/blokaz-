@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useBalance, useWriteContract } from 'wagmi'
 import {
-  GOODDOLLAR_ADDRESSES,
+  GAME_TREASURY,
   STABLECOIN_TOKENS,
-  G_GAME_ECONOMICS,
   type StablecoinSymbol,
 } from '../constants/contracts'
 import { useGameStore } from '../stores/gameStore'
@@ -32,7 +31,7 @@ export function isMiniPayBrowser(): boolean {
 
 export function useStablecoinRevive() {
   const { address } = useAccount()
-  const { setClearanceTurns, reviveGame } = useGameStore()
+  const { reviveGame } = useGameStore()
   const { writeContractAsync } = useWriteContract()
   const writeRef = useRef(writeContractAsync)
   useEffect(() => { writeRef.current = writeContractAsync }, [writeContractAsync])
@@ -90,10 +89,9 @@ export function useStablecoinRevive() {
           address: token.address,
           abi: ERC20_TRANSFER_ABI,
           functionName: 'transfer',
-          args: [GOODDOLLAR_ADDRESSES.TREASURY, token.reviveCost],
+          args: [GAME_TREASURY, token.reviveCost],
           ...txOverrides,
         })
-        setClearanceTurns(G_GAME_ECONOMICS.CLEARANCE_MODE_TURNS)
         reviveGame()
         return true
       } catch (err) {
@@ -105,7 +103,7 @@ export function useStablecoinRevive() {
         setIsPaying(false)
       }
     },
-    [address, setClearanceTurns, reviveGame]
+    [address, reviveGame]
   )
 
   return {

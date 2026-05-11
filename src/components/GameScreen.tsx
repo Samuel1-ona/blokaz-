@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useGoodDollar } from '../hooks/useGoodDollar'
 import { useGameStore } from '../stores/gameStore'
 import { GridRenderer } from '../canvas/GridRenderer'
 import { PieceRenderer } from '../canvas/PieceRenderer'
@@ -445,39 +444,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const showNoGasModal = hasNoGas && !noGasDismissed
   // ─────────────────────────────────────────────────────────────────────────
 
-  const {
-    gModeEnabled,
-    setGModeEnabled,
-    isWhitelisted,
-    isStreaming,
-    gBalance,
-    entitlement,
-    claimUBI,
-    startGStream,
-    stopGStream,
-    payForRetry,
-    verificationUrl,
-  } = useGoodDollar()
-
-  // G$ Auto-stream Effect — startGStream/stopGStream are stable callbacks (refs inside hook)
-  // so omitting them from deps is intentional and safe
-  const startGStreamRef = useRef(startGStream)
-  const stopGStreamRef = useRef(stopGStream)
-  useEffect(() => {
-    startGStreamRef.current = startGStream
-  }, [startGStream])
-  useEffect(() => {
-    stopGStreamRef.current = stopGStream
-  }, [stopGStream])
-
-  useEffect(() => {
-    if (gModeEnabled && isWhitelisted && gameSession && !isStreaming) {
-      startGStreamRef.current()
-    } else if ((!gameSession || !gModeEnabled) && isStreaming) {
-      stopGStreamRef.current()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gModeEnabled, isWhitelisted, !!gameSession, isStreaming])
   const { leaderboard: lbData } = useLeaderboard()
   const bestScore = React.useMemo(() => {
     if (!lbData || !address) return undefined
@@ -927,12 +893,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const canvasArea = (
     <CanvasArea
       {...commonCanvasProps}
-      gModeEnabled={gModeEnabled}
-      setGModeEnabled={setGModeEnabled}
-      isWhitelisted={isWhitelisted}
-      verificationUrl={verificationUrl}
-      entitlement={entitlement}
-      claimUBI={claimUBI}
     />
   )
 
@@ -1058,15 +1018,6 @@ interface CanvasAreaProps {
   hasStoredGame: boolean
   continueGame: () => void
   startNewGame: () => void
-
-  // GoodDollar Props
-  gModeEnabled: boolean
-  setGModeEnabled: (v: boolean) => void
-  isWhitelisted: boolean
-  verificationUrl: string | null
-  address: string | undefined
-  entitlement: bigint
-  claimUBI: () => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1083,15 +1034,6 @@ const ClassicStartCard: React.FC<{
   hasStoredGame: boolean
   continueGame: () => void
   startNewGame: () => void
-
-  // GoodDollar Props
-  gModeEnabled: boolean
-  setGModeEnabled: (v: boolean) => void
-  isWhitelisted: boolean
-  verificationUrl: string | null
-  address: string | undefined
-  entitlement: bigint
-  claimUBI: () => void
 }> = ({
   isConnected,
   handleStartGame,
@@ -1106,18 +1048,7 @@ const ClassicStartCard: React.FC<{
   hasStoredGame,
   continueGame,
   startNewGame,
-  gModeEnabled,
-  setGModeEnabled,
-  isWhitelisted,
-  verificationUrl,
-  address,
-  entitlement,
-  claimUBI,
 }) => {
-  const [copied, setCopied] = React.useState(false)
-  const [showQR, setShowQR] = React.useState(false)
-  const isLinkReady = !!verificationUrl && verificationUrl.startsWith('https://goodid');
-  const displayUrl = verificationUrl || 'https://goodid.gooddollar.org';
 
   return (
   <div
@@ -1208,196 +1139,6 @@ const ClassicStartCard: React.FC<{
       )}
     </button>
 
-    {/* GoodDollar (G$) Reward Mode */}
-    {isConnected && (
-      <div
-        className="border-4 border-ink"
-        style={{
-          background: 'var(--paper-2)',
-          boxShadow: '4px 4px 0 var(--shadow)',
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between border-b-4 border-ink px-4 py-3"
-          style={{ background: 'var(--paper)' }}
-        >
-          <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.18em]">
-            <div
-              className="flex h-5 w-5 items-center justify-center border-2 border-ink font-display text-[8px] font-bold"
-              style={{
-                background: 'var(--accent-lime)',
-                color: 'var(--ink-fixed)',
-              }}
-            >
-              G$
-            </div>
-            REWARD MODE
-          </div>
-          <button
-            onClick={() => setGModeEnabled(!gModeEnabled)}
-            className={`relative h-7 w-14 border-[3px] border-ink transition-colors ${gModeEnabled ? 'bg-accent-lime' : 'bg-paper-2'}`}
-            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
-          >
-            <div
-              className={`absolute top-0.5 h-4 w-4 border-2 border-ink transition-transform ${gModeEnabled ? 'translate-x-[30px]' : 'translate-x-0.5'}`}
-              style={{ background: 'var(--paper)' }}
-            />
-          </button>
-        </div>
-
-        {gModeEnabled && (
-          <div className="p-4">
-            {!isWhitelisted ? (
-              <div className="flex flex-col gap-3">
-                <div
-                  className="font-body text-[10px] leading-relaxed"
-                  style={{ color: 'var(--ink-soft)' }}
-                >
-                  Face-verify once to earn G$ while you play and unlock the
-                  Revive power.
-                </div>
-                <a
-                  href={isLinkReady ? displayUrl : '#'}
-                  onClick={(e) => {
-                    if (!isLinkReady) {
-                      e.preventDefault();
-                      alert('Generating verification link... please wait a moment.');
-                    }
-                  }}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] ${!isLinkReady ? 'opacity-50' : ''}`}
-                  style={{ color: 'var(--ink-fixed)' }}
-                >
-                  {!isLinkReady && <div className="brutal-loader !border-paper h-3 w-3" />}
-                  <BrutalIcon name={isLinkReady ? 'alert' : 'chevron-right'} size={12} />
-                  {isLinkReady ? 'VERIFY IDENTITY' : 'GENERATING LINK...'}
-                </a>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (!isLinkReady) return;
-                      navigator.clipboard.writeText(displayUrl)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
-                    }}
-                    className={`hover:bg-accent-lime/10 relative flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
-                    style={{ background: 'var(--paper)' }}
-                  >
-                    {copied ? (
-                      <span className="text-accent-lime animate-pulse font-bold">COPIED TO CLIPBOARD!</span>
-                    ) : (
-                      'COPY LINK'
-                    )}
-                  </button>
-                  <div className="relative">
-                    <button
-                      onClick={() => isLinkReady && setShowQR(true)}
-                      className={`hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
-                      style={{ background: 'var(--paper)' }}
-                    >
-                      QR CODE
-                    </button>
-                    {showQR && (
-                      <div 
-                        className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
-                        onClick={() => setShowQR(false)}
-                      >
-                        <div 
-                          className="w-full max-w-[300px] border-4 border-ink p-6 shadow-[10px_10px_0_var(--shadow)]"
-                          style={{ background: 'var(--paper)' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="mb-4 flex items-center justify-between border-b-2 border-ink pb-2">
-                            <span className="font-display text-[10px] uppercase tracking-widest">VERIFY ON PHONE</span>
-                            <button onClick={() => setShowQR(false)} className="font-bold">×</button>
-                          </div>
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(displayUrl)}`}
-                            alt="Verification QR Code"
-                            className="mx-auto block aspect-square w-full border-4 border-ink"
-                          />
-                          <div
-                            className="mt-4 text-center font-display text-[8px] uppercase tracking-widest"
-                            style={{ color: 'var(--ink-soft)' }}
-                          >
-                            SCAN THIS QR CODE WITH YOUR PHONE'S CAMERA
-                          </div>
-                          <button 
-                            onClick={() => setShowQR(false)} 
-                            className="mt-6 w-full border-[3px] border-ink py-2 font-display text-[9px] uppercase tracking-widest shadow-[4px_4px_0_var(--shadow)] hover:bg-accent-lime transition-colors"
-                            style={{ background: 'var(--accent-lime)' }}
-                          >
-                            CLOSE
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div
-                  className="border-[3px] border-ink/20 p-2"
-                  style={{ background: 'var(--paper)' }}
-                >
-                  <div
-                    className="break-all font-mono text-[8px]"
-                    style={{ color: 'var(--ink-soft)' }}
-                  >
-                    {isConnected && address ? address : 'No wallet connected'}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div
-                    className="flex items-center gap-2 border-[3px] border-ink px-3 py-1.5"
-                    style={{
-                      background: 'var(--accent-lime)',
-                      color: 'var(--ink-fixed)',
-                    }}
-                  >
-                    <BrutalIcon name="zap" size={10} strokeWidth={2.5} />
-                    <span className="font-display text-[9px] uppercase tracking-widest">
-                      VERIFIED HUMAN
-                    </span>
-                  </div>
-                  {entitlement > 0n && (
-                    <button
-                      onClick={claimUBI}
-                      className="border-[3px] border-ink px-3 py-1.5 font-display text-[9px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-                      style={{
-                        background: 'var(--accent-yellow)',
-                        color: 'var(--ink-fixed)',
-                      }}
-                    >
-                      CLAIM {Number(entitlement) / 100} G$
-                    </button>
-                  )}
-                </div>
-                <div
-                  className="flex items-center gap-2 border-[3px] border-ink p-2.5"
-                  style={{ background: 'var(--paper)' }}
-                >
-                  <div
-                    className="h-1.5 w-1.5 animate-pulse rounded-full"
-                    style={{ background: 'var(--accent-lime)' }}
-                  />
-                  <span
-                    className="font-display text-[9px] uppercase tracking-[0.15em]"
-                    style={{ color: 'var(--ink-soft)' }}
-                  >
-                    STREAMING 0.05 G$/MIN WHILE ACTIVE
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )}
-
     {sessionConflict && (
       <div className="mt-6 border-4 border-danger bg-paper-2 p-4 shadow-[4px_4px_0_var(--shadow)]">
         <div className="mb-2 flex items-center font-display text-xs uppercase tracking-widest text-piece-red">
@@ -1478,12 +1219,6 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   hasStoredGame,
   continueGame,
   startNewGame,
-  gModeEnabled,
-  setGModeEnabled,
-  isWhitelisted,
-  verificationUrl,
-  entitlement,
-  claimUBI,
 }) => {
   if (!gameSession) {
     return (
@@ -1501,13 +1236,6 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         hasStoredGame={hasStoredGame}
         continueGame={continueGame}
         startNewGame={startNewGame}
-        gModeEnabled={gModeEnabled}
-        setGModeEnabled={setGModeEnabled}
-        isWhitelisted={isWhitelisted}
-        verificationUrl={verificationUrl}
-        address={address}
-        entitlement={entitlement}
-        claimUBI={claimUBI}
       />
     )
   }

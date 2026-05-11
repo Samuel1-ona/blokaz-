@@ -6,7 +6,6 @@ import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
 import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
-import { useGoodDollar } from '../hooks/useGoodDollar'
 import { web3AuthConnector } from '../config/web3auth'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 
@@ -23,7 +22,6 @@ interface HeaderProps {
 const MiniPayWalletBadge: React.FC = () => {
   const { address, isConnected } = useAccount()
   const { effectiveTheme } = useTheme()
-  const { isGSupported, gModeEnabled, isWhitelisted, gBalance, verificationUrl } = useGoodDollar()
   const isDarkTheme = effectiveTheme !== 'light'
   const walletBg = isDarkTheme ? 'var(--accent)' : 'var(--accent-soft)'
   const walletColor = isDarkTheme ? '#FFFFFF' : 'var(--ink-fixed)'
@@ -44,24 +42,6 @@ const MiniPayWalletBadge: React.FC = () => {
         />
         {isConnected && address ? truncateAddress(address) : 'MINIPAY'}
       </div>
-
-      {isGSupported && gModeEnabled && isConnected && (
-        <div 
-          className={`flex items-center gap-2 border-[3px] border-ink px-3 py-[10px] font-display text-[10px] tracking-widest uppercase shadow-[3px_3px_0_var(--shadow)] ${isWhitelisted ? 'bg-paper text-ink' : 'bg-accent-pink text-white'}`}
-        >
-          {isWhitelisted ? (
-             <span className="flex items-center gap-1">
-               <BrutalIcon name="check" size={12} />
-               {gBalance?.formatted?.slice(0, 5)} G$
-             </span>
-          ) : (
-            <a href={verificationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
-              <BrutalIcon name="alert" size={12} />
-              VERIFY G$
-            </a>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -413,7 +393,6 @@ export const Header: React.FC<HeaderProps> = ({
   const { address } = useAccount()
   const { owner } = useOwner()
   const { effectiveTheme } = useTheme()
-  const { isGSupported, gModeEnabled, isWhitelisted, gBalance, verificationUrl } = useGoodDollar()
   const { isConnected } = useAccount()
 
   const isOwner =
@@ -550,45 +529,6 @@ export const Header: React.FC<HeaderProps> = ({
                         <LoginDropdown onConnectWallet={openConnectModal} />
                       ) : (
                         <>
-                          {isGSupported && gModeEnabled && (
-                            <>
-                              <div
-                                className={`hidden items-center gap-2 border-[3px] border-ink px-3 py-[10px] font-display text-[10px] tracking-[0.12em] uppercase lg:flex ${
-                                  isWhitelisted ? '' : 'text-white'
-                                }`}
-                                style={{
-                                  background: isWhitelisted
-                                    ? 'var(--paper)'
-                                    : 'var(--accent-pink)',
-                                  color: isWhitelisted ? 'var(--ink)' : '#FFFFFF',
-                                  boxShadow: '3px 3px 0 var(--shadow)',
-                                }}
-                              >
-                                {isWhitelisted ? (
-                                  <>
-                                    <img
-                                      src="https://docs.gooddollar.org/~gitbook/image?url=https%3A%2F%2F1693836101-files.gitbook.io%2F~%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-LfsEjhezedCgGFXCkms%252Ficon%252F7UuO7n9qO2vO6Z3z7N2N%252FGoodDollar_Icon_Green.png%3Falt%3Dmedia%26token%3D7f3b8b1b-7f1b-4f1b-8f1b-7f1b8f1b7f1b&width=32&dpr=2"
-                                      alt="G$"
-                                      className="h-4 w-4"
-                                    />
-                                    {gBalance?.formatted?.slice(0, 6)} G$
-                                  </>
-                                ) : (
-                                  <a
-                                    href={verificationUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2"
-                                  >
-                                    <BrutalIcon name="alert" size={14} />
-                                    VERIFY IDENTITY
-                                  </a>
-                                )}
-                              </div>
-                              <HeaderDivider />
-                            </>
-                          )}
-
                           {/* Address chip: hidden on mobile to save width */}
                           <button
                             onClick={handleClick}

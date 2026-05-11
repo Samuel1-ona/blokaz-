@@ -12,25 +12,12 @@ interface GameState {
   onChainSeed: `0x${string}` | null
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
   tournamentId: bigint | null
-  
-  // GoodDollar Integration States
-  gModeEnabled: boolean
-  isWhitelisted: boolean
-  isStreaming: boolean
-  clearanceTurns: number
-  verificationUrl: string | null
-  verificationAddress: string | null
 
   startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
   setOnChainGameId: (id: bigint) => void
   setOnChainSeed: (seed: `0x${string}`) => void
   setTournamentId: (id: bigint | null) => void
-  setGModeEnabled: (enabled: boolean) => void
-  setIsWhitelisted: (whitelisted: boolean) => void
-  setIsStreaming: (streaming: boolean) => void
-  setClearanceTurns: (turns: number) => void
-  setVerificationUrl: (url: string | null, address: string | null) => void
   placePiece: (index: number, r: number, c: number) => any
   resetGame: () => void
   reviveGame: () => void
@@ -47,12 +34,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainSeed: null,
   onChainStatus: 'none',
   tournamentId: null,
-  gModeEnabled: false,
-  isWhitelisted: false,
-  isStreaming: false,
-  clearanceTurns: 0,
-  verificationUrl: null,
-  verificationAddress: null,
 
   startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
@@ -83,11 +64,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   setOnChainGameId: (id) => set({ onChainGameId: id }),
   setOnChainSeed: (seed) => set({ onChainSeed: seed }),
   setTournamentId: (id) => set({ tournamentId: id }),
-  setGModeEnabled: (enabled) => set({ gModeEnabled: enabled }),
-  setIsWhitelisted: (whitelisted) => set({ isWhitelisted: whitelisted }),
-  setIsStreaming: (streaming) => set({ isStreaming: streaming }),
-  setClearanceTurns: (turns) => set({ clearanceTurns: turns }),
-  setVerificationUrl: (url, address) => set({ verificationUrl: url, verificationAddress: address }),
 
   placePiece: (index, r, c) => {
     const { gameSession } = get()
@@ -112,19 +88,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   
   reviveGame: () => {
-    const { gameSession, clearanceTurns } = get()
+    const { gameSession } = get()
     if (!gameSession) return
-    
-    // Default turns to 3 if not set yet
-    const turns = clearanceTurns > 0 ? clearanceTurns : 3
-    gameSession.activateClearance(turns)
-    
+    gameSession.revive()
     set({
       isGameOver: false,
       currentPieces: [...gameSession.currentPieces],
-      clearanceTurns: gameSession.clearanceTurns
     })
-    
     // @ts-ignore
     window.currentPieces = gameSession.currentPieces
   },

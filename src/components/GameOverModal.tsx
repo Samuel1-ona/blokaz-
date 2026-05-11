@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
-import { useGoodDollar } from '../hooks/useGoodDollar'
 import { useStablecoinRevive } from '../hooks/useStablecoinRevive'
 import { STABLECOIN_TOKENS, type StablecoinSymbol } from '../constants/contracts'
 import { packMoves } from '../engine/replay'
@@ -65,14 +64,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   } = useGameStore()
 
   const {
-    gModeEnabled,
-    isWhitelisted,
-    gBalance,
-    payForRetry,
-    verificationUrl,
-  } = useGoodDollar()
-
-  const {
     balances: stableBalances,
     canAfford,
     hasAnyBalance: hasStableBalance,
@@ -88,17 +79,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     await payForRevive(selectedToken)
   }
 
-  const [isPayingRetry, setIsPayingRetry] = React.useState(false)
   const [showShareSheet, setShowShareSheet] = React.useState(false)
 
-  const handleGRetry = async () => {
-    setIsPayingRetry(true)
-    const success = await payForRetry()
-    if (success) {
-      reviveGame()
-    }
-    setIsPayingRetry(false)
-  }
   const { submitScore, isPending, isConfirming, isSuccess, error } =
     useSubmitScore()
   const {
@@ -530,41 +512,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   {stableError && (
                     <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
                       {stableError}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* GoodDollar revival — compact */}
-            {gModeEnabled && mode === 'classic' && (
-              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
-                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-1.5" style={{ background: 'var(--paper)' }}>
-                  <div className="flex items-center gap-1.5 font-display text-[9px] uppercase tracking-[0.15em]">
-                    <div className="flex h-4 w-4 items-center justify-center border-[2px] border-ink font-display text-[7px] font-bold" style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}>G$</div>
-                    G$ REVIVAL
-                  </div>
-                  <span className="font-display text-[8px] uppercase tracking-widest opacity-60">10 G$</span>
-                </div>
-                <div className="p-2.5">
-                  {!isWhitelisted ? (
-                    <a href={verificationUrl} target="_blank" rel="noopener noreferrer"
-                      className="brutal-btn flex w-full items-center justify-center gap-1.5 border-[3px] border-ink bg-accent-pink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
-                      style={{ color: 'var(--ink-fixed)' }}>
-                      <BrutalIcon name="alert" size={11} /> VERIFY TO REVIVE
-                    </a>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-[10px] opacity-70">
-                        {gBalance ? (Number(gBalance.value) / 1e18).toFixed(1) : '0'} G$
-                      </span>
-                      <button
-                        onClick={handleGRetry}
-                        disabled={isPayingRetry || (gBalance?.value || 0n) < 10n * 10n ** 18n}
-                        className="brutal-btn ml-auto flex items-center gap-1.5 border-[3px] border-ink bg-accent-lime px-3 py-2 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
-                        style={{ color: 'var(--ink-fixed)' }}>
-                        {isPayingRetry ? <div className="brutal-loader" /> : <><BrutalIcon name="zap" size={11} strokeWidth={2.5} /> REVIVE</>}
-                      </button>
                     </div>
                   )}
                 </div>

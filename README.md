@@ -38,12 +38,6 @@ Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://cel
 - Signature-based game submission (EIP-712) to prevent replay attacks
 - Automatic settlement and prize distribution on finalization
 
-### GoodDollar Integration
-- Claim weekly G$ UBI entitlement directly in-app
-- Stake G$ via Superfluid streaming
-- Pay for retry turns with G$ tokens
-- Identity verification via GoodDollar whitelist
-
 ### Mobile-First
 - Runs as a MiniPay mini-app (Opera's Celo wallet)
 - Social login via Web3Auth (Google, Twitter, email)
@@ -62,7 +56,6 @@ Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://cel
 | Web3 Primitives | Wagmi 2 + Viem 2 |
 | Wallet UI | RainbowKit 2 |
 | Social Login | Web3Auth Modal 9 |
-| GoodDollar SDK | `@goodsdks/citizen-sdk` |
 | State | Zustand |
 | Data Fetching | TanStack React Query 5 |
 | Testing | Vitest + jsdom |
@@ -192,7 +185,7 @@ VITE_WEB3AUTH_NETWORK=sapphire_devnet
 
 - Moves are packed into `uint256` arrays and submitted alongside the original random seed
 - The contract replays a spot-check of a random subset of submitted moves against the seed
-- A failed spot-check voids the submission; repeated failures lock the player into a clearance mode, unlockable by paying a small fee in G$ tokens
+- A failed spot-check voids the submission
 
 ---
 
@@ -217,21 +210,6 @@ VITE_WEB3AUTH_NETWORK=sapphire_devnet
 - Once the tournament `endTime` passes, anyone can call `finalizeTournament` to distribute prizes
 - Prize pool = total entry fees minus protocol fee (configurable in basis points)
 - Rewards are split according to the `rewardBps` array — e.g. `[5000, 3000, 2000]` for 50 / 30 / 20% top 3
-
----
-
-## GoodDollar Integration
-
-Blokaz integrates with [GoodDollar](https://www.gooddollar.org) to reward verified Celo users:
-
-| Feature | Description |
-|---------|-------------|
-| **UBI Claim** | Claim weekly G$ entitlement via `claimUBI()` |
-| **G$ Streaming** | Start/stop a Superfluid stream to earn continuous G$ |
-| **Retry Payments** | Pay G$ to unlock additional attempts after anti-cheat clearance |
-| **Identity Verification** | Verify via the GoodDollar whitelist to access UBI features |
-
-The `useGoodDollar` hook exposes `claimUBI`, `startGStream`, `stopGStream`, `payForRetry`, `checkEntitlement`, and a `verificationUrl` for the in-app identity verification flow.
 
 ---
 
@@ -280,7 +258,6 @@ blokaz/
 │   │   └── SplashScreen.tsx        React splash (skipped if static HTML splash already ran)
 │   ├── hooks/
 │   │   ├── useBlokzGame.ts         Game contract reads + writes
-│   │   ├── useGoodDollar.ts        G$ UBI claim, streaming, retry payments
 │   │   ├── useLeaderboard.ts       Epoch-scoped leaderboard fetching
 │   │   ├── useStablecoinRevive.ts  USDC allowance + approval helpers
 │   │   └── useFreshNonce.ts        Explicit pending-nonce fetcher for write sequencing
