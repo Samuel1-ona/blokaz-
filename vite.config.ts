@@ -1,7 +1,53 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import fs from 'fs'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+
+// Vite plugin: inject a tiny inline script that preloads vendor-web3auth and
+// Web3Provider only for non-MiniPay visitors. MiniPay sets window.ethereum.isMiniPay
+// before any page script runs, so the check is reliable at HTML-parse time.
+// This restores parallel downloading of those chunks for browser users (~505ms start)
+// while keeping them undownloaded for MiniPay users — best of both worlds.
+// Uses writeBundle (post-write) because Vite's HTML plugin emits index.html AFTER
+// user plugins' generateBundle hook, making generateBundle too early.
+function conditionalWeb3AuthPreload() {
+  return {
+    name: 'conditional-web3auth-preload',
+    apply: 'build' as const,
+    writeBundle(opts: { dir?: string }) {
+      const outDir = opts.dir || 'dist'
+      const assetsDir = `${outDir}/assets`
+
+      let web3authFile = ''
+      let providerFile = ''
+
+      try {
+        for (const f of fs.readdirSync(assetsDir)) {
+          if (f.startsWith('vendor-web3auth') && f.endsWith('.js')) web3authFile = `/assets/${f}`
+          else if (f.startsWith('Web3Provider-') && f.endsWith('.js')) providerFile = `/assets/${f}`
+        }
+      } catch { return }
+
+      if (!web3authFile) return
+
+      const htmlPath = `${outDir}/index.html`
+      let html = fs.readFileSync(htmlPath, 'utf-8')
+
+      const hrefs = [web3authFile, providerFile].filter(Boolean).map((h) => JSON.stringify(h)).join(',')
+      const script =
+        `<script>(function(){` +
+        `if(window.ethereum&&window.ethereum.isMiniPay)return;` +
+        `[${hrefs}].forEach(function(h){` +
+        `var l=document.createElement('link');l.rel='modulepreload';l.crossOrigin='';l.href=h;` +
+        `document.head.appendChild(l);` +
+        `});` +
+        `})();</script>`
+
+      fs.writeFileSync(htmlPath, html.replace('</head>', script + '\n  </head>'))
+    },
+  }
+}
 
 // Vite plugin: make the generated CSS bundle non-blocking.
 // Safe here because the inline static splash covers all app content until
@@ -34,6 +80,7 @@ export default defineConfig({
       protocolImports: false,
     }),
     deferCssPlugin,
+    conditionalWeb3AuthPreload(),
   ],
   resolve: {
     alias: {
