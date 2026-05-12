@@ -12,6 +12,7 @@ import GameOverModal from './GameOverModal'
 import NoGasModal from './NoGasModal'
 import { ComboOverlay } from './ComboOverlay'
 import { BrutalIcon } from './BrutalIcon'
+import HowToPlayModal, { hasSeenOnboarding } from './HowToPlayModal'
 import {
   hapticImpact,
   hapticNotification,
@@ -1049,8 +1050,13 @@ const ClassicStartCard: React.FC<{
   continueGame,
   startNewGame,
 }) => {
+  const [showHowToPlay, setShowHowToPlay] = useState(!hasSeenOnboarding())
 
   return (
+  <>
+  {showHowToPlay && (
+    <HowToPlayModal onDone={() => setShowHowToPlay(false)} />
+  )}
   <div
     className="relative z-10 flex w-full flex-col gap-4 rounded-[6px] border-4 border-ink bg-paper px-4 py-5 sm:gap-5 sm:px-7 sm:py-8"
     style={{ boxShadow: '6px 6px 0 var(--accent-yellow)' }}
@@ -1190,7 +1196,18 @@ const ClassicStartCard: React.FC<{
         TX ERROR: {startGameError.message?.slice(0, 120)}
       </div>
     )}
+
+    {/* How to play link — re-opens tutorial after first time */}
+    <button
+      onClick={() => setShowHowToPlay(true)}
+      className="flex items-center justify-center gap-1.5 font-display text-[10px] uppercase tracking-widest opacity-50 hover:opacity-100 transition-opacity"
+      style={{ color: 'var(--ink)' }}
+    >
+      <BrutalIcon name="alert" size={10} strokeWidth={2} />
+      HOW TO PLAY
+    </button>
   </div>
+  </>
   )
 }
 
