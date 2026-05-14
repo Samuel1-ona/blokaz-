@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import TournamentLeaderboard from './TournamentLeaderboard'
 import {
   useTournamentCount,
@@ -11,10 +11,15 @@ import {
   useFinalizeTournament,
   USDC_DECIMALS,
 } from '../hooks/useBlokzGame'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
 import { useGameStore } from '../stores/gameStore'
 import { IS_MINIPAY } from '../utils/miniPay'
+import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
+import contractInfo from '../contract.json'
+
+const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
+const PAST_LIMIT = 2
 
 const MINIPAY_DEPOSIT_URL = 'https://minipay.opera.com/add_cash'
 
@@ -491,6 +496,50 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
   } | null>(null)
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
 
+  // Fetch endTime for every tournament so we can sort client-side
+  const endTimeContracts = useMemo(
+    () =>
+      count && count > 0n
+        ? Array.from({ length: Number(count) }, (_, i) => ({
+            address: TOURNAMENT_ADDRESS,
+            abi: BLOKZ_TOURNAMENT_ABI,
+            functionName: 'tournaments' as const,
+            args: [BigInt(i + 1)] as const,
+          }))
+        : [],
+    [count]
+  )
+  const { data: endTimeRows } = useReadContracts({
+    contracts: endTimeContracts,
+    query: { enabled: endTimeContracts.length > 0 },
+  })
+
+  // Build sorted ID list: active first, then up to PAST_LIMIT most-recently-ended
+  const sortedIds = useMemo(() => {
+    if (!count || count === 0n) return []
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    const all = Array.from({ length: Number(count) }, (_, i) => BigInt(i + 1))
+
+    if (!endTimeRows) return all // fallback to natural order while loading
+
+    const withEnd = all.map((id, i) => {
+      const row = endTimeRows[i]
+      const endTime =
+        row?.status === 'success' && row.result
+          ? ((row.result as readonly unknown[])[3] as bigint)
+          : 0n
+      return { id, endTime }
+    })
+
+    const active = withEnd.filter((t) => now < t.endTime)
+    const ended = withEnd
+      .filter((t) => now >= t.endTime)
+      .sort((a, b) => (a.endTime > b.endTime ? -1 : 1)) // most-recently-ended first
+      .slice(0, PAST_LIMIT)
+
+    return [...active, ...ended].map((t) => t.id)
+  }, [count, endTimeRows])
+
   const handleStartMatch = useCallback(
     (id: bigint) => {
       setTournamentId(id)
@@ -527,12 +576,12 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
               }}
             />
           ))
-        ) : count && count > 0n ? (
-          Array.from({ length: Number(count) }).map((_, i) => (
+        ) : sortedIds.length > 0 ? (
+          sortedIds.map((id, i) => (
             <TournamentCard
-              key={i}
-              id={BigInt(i + 1)}
-              index={i + 1}
+              key={id.toString()}
+              id={id}
+              index={Number(id)}
               onStartMatch={handleStartMatch}
               onViewRankings={handleOpenLeaderboard}
             />
