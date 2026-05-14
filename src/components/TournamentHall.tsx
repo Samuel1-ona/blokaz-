@@ -113,7 +113,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
         </div>
 
         {/* Tournament list */}
-        <TournamentSection onStartMatch={() => onEnterMatch()} />
+        <TournamentSection onStartMatch={() => onEnterMatch()} onBack={onBack} />
 
         {/* Back */}
         <div className="mt-8 flex justify-center">

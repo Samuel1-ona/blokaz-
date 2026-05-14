@@ -486,8 +486,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
           {/* ── Actions ── */}
           <div className="flex flex-col gap-2.5 p-3">
-            {/* Stablecoin revival — shown first so player sees it without scrolling */}
-            {mode === 'classic' && (
+            {/* Stablecoin revival — shown in both classic and tournament modes */}
+            {(mode === 'classic' || (mode === 'tournament' && !isAllSuccess)) && (
               <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
                 <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
                   <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">

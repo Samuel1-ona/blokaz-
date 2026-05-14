@@ -36,6 +36,13 @@ interface TournamentCardProps {
   index: number
   onStartMatch: (id: bigint) => void
   onViewRankings: (id: bigint, prizePool: bigint) => void
+  onBack?: () => void
+}
+
+const isUserRejection = (err?: Error | null) => {
+  if (!err) return false
+  const msg = err.message.toLowerCase()
+  return msg.includes('reject') || msg.includes('denied') || msg.includes('cancel') || msg.includes('user refused')
 }
 
 const TournamentCard: React.FC<TournamentCardProps> = ({
@@ -43,6 +50,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   index,
   onStartMatch,
   onViewRankings,
+  onBack,
 }) => {
   const { address } = useAccount()
   const {
@@ -105,6 +113,12 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
     if (isFinalizeSuccess) refetchTournament()
   }, [isFinalizeSuccess, refetchTournament])
 
+  useEffect(() => {
+    if (isUserRejection(approveError) || isUserRejection(joinError)) {
+      onBack?.()
+    }
+  }, [approveError, joinError, onBack])
+
   const [now, setNow] = useState(BigInt(Math.floor(Date.now() / 1000)))
   useEffect(() => {
     const timer = setInterval(
@@ -143,7 +157,6 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   }
   const isStarted = now >= startTime
   const isEnded = now >= endTime
-  if (isEnded) return null
   const isFull = playerCount >= maxPlayers
   // needsApproval: undefined allowance (still loading) also counts as needing approval.
   // justApproved overrides: once the approve tx confirms, show JOIN immediately
@@ -473,10 +486,12 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
 
 interface TournamentSectionProps {
   onStartMatch?: (id: bigint) => void
+  onBack?: () => void
 }
 
 const TournamentSection: React.FC<TournamentSectionProps> = ({
   onStartMatch,
+  onBack,
 }) => {
   const { count, isLoading } = useTournamentCount()
   const { setTournamentId } = useGameStore()
@@ -530,6 +545,7 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
               index={i + 1}
               onStartMatch={handleStartMatch}
               onViewRankings={handleOpenLeaderboard}
+              onBack={onBack}
             />
           ))
         ) : (
