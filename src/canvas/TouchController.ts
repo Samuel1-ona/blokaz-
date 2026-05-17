@@ -1,7 +1,7 @@
 import { GridRenderer } from './GridRenderer'
 import { PieceRenderer } from './PieceRenderer'
 import type { ShapeDefinition } from '../engine/shapes'
-import { Grid } from '../engine/grid'
+import { hapticSelection } from '../miniapp/haptics'
 
 export class TouchController {
   private canvas: HTMLCanvasElement
@@ -16,6 +16,17 @@ export class TouchController {
   private ghostPos: { row: number; col: number } | null = null
   private destroyed: boolean = false
   private hoverIndex: number | null = null
+  private lastGhostValid: boolean | null = null
+
+  // Tap-to-select state
+  private selectedIndex: number | null = null
+  private placingViaTap: boolean = false
+
+  // Tap detection
+  private tapStartTime: number = 0
+  private tapStartClientX: number = 0
+  private tapStartClientY: number = 0
+
   private onHoverChange?: (index: number | null) => void
 
   constructor(
@@ -32,7 +43,6 @@ export class TouchController {
     this.onPlace = onPlace
     this.canPlace = canPlace
     this.onHoverChange = onHoverChange
-
     this.initEvents()
   }
 
@@ -51,12 +61,12 @@ export class TouchController {
       e.preventDefault()
       this.handleStart(e.touches[0] as any)
     }, { passive: false })
-    
+
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault()
       this.handleMove(e.touches[0] as any)
     }, { passive: false })
-    
+
     window.addEventListener('touchend', (e) => {
       this.handleEnd(e.changedTouches[0] as any)
     })
@@ -67,96 +77,238 @@ export class TouchController {
     this.isDragging = false
     this.dragIndex = null
     this.hoverIndex = null
+    this.selectedIndex = null
+    this.placingViaTap = false
+    this.lastGhostValid = null
     this.onHoverChange?.(null)
     ;(window as any).activeGhost = null
   }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  private isTap(clientX: number, clientY: number): boolean {
+    const elapsed = Date.now() - this.tapStartTime
+    const dx = clientX - this.tapStartClientX
+    const dy = clientY - this.tapStartClientY
+    return elapsed < 220 && Math.sqrt(dx * dx + dy * dy) < 12
+  }
+
+  private snapToNearest(
+    shape: ShapeDefinition,
+    center: { row: number; col: number }
+  ): { row: number; col: number } | null {
+    // Check orthogonal neighbours first (distance 1), then diagonals (√2)
+    const candidates = [
+      { dr: 0, dc: -1 }, { dr: 0, dc: 1 }, { dr: -1, dc: 0 }, { dr: 1, dc: 0 },
+      { dr: -1, dc: -1 }, { dr: -1, dc: 1 }, { dr: 1, dc: -1 }, { dr: 1, dc: 1 },
+    ]
+    for (const { dr, dc } of candidates) {
+      const r = center.row + dr
+      const c = center.col + dc
+      if (r >= 0 && r < 9 && c >= 0 && c < 9 && this.canPlace(shape, r, c)) {
+        return { row: r, col: c }
+      }
+    }
+    return null
+  }
+
+  private updateGhost(
+    shape: ShapeDefinition,
+    clientX: number,
+    clientY: number,
+    useFingerOffset: boolean
+  ): void {
+    let lookupY = clientY
+    if (useFingerOffset) {
+      const cellSizeScreen = this.gridRenderer.getCellSizeInScreen()
+      const maxRow = Math.max(...(shape.cells as [number, number][]).map(([r]) => r))
+      lookupY = clientY - (maxRow + 1.5) * cellSizeScreen
+    }
+
+    const gridPos = this.gridRenderer.screenToGrid(clientX, lookupY)
+    if (gridPos) {
+      const isValid = this.canPlace(shape, gridPos.row, gridPos.col)
+      if (isValid && this.lastGhostValid !== true) hapticSelection()
+      this.lastGhostValid = isValid
+      this.ghostPos = gridPos
+      ;(window as any).activeGhost = { ...gridPos, valid: isValid }
+    } else {
+      this.ghostPos = null
+      this.lastGhostValid = null
+      ;(window as any).activeGhost = null
+    }
+  }
+
+  private tryPlace(pieceIndex: number, pos: { row: number; col: number }, shape: ShapeDefinition): boolean {
+    let placePos: { row: number; col: number } | null = pos
+    if (!this.canPlace(shape, placePos.row, placePos.col)) {
+      placePos = this.snapToNearest(shape, placePos)
+    }
+    if (placePos && this.canPlace(shape, placePos.row, placePos.col)) {
+      this.onPlace(pieceIndex, placePos.row, placePos.col)
+      return true
+    }
+    return false
+  }
+
+  // ── Event handlers ────────────────────────────────────────────────────────
 
   private handleStart(e: MouseEvent | Touch) {
     if (this.destroyed) return
     const rect = this.canvas.getBoundingClientRect()
     const x = (e.clientX - rect.left) * (this.canvas.width / rect.width)
     const y = (e.clientY - rect.top) * (this.canvas.height / rect.height)
-
-    // @ts-ignore - access to internal pieces from tray
     const pieces = (window as any).currentPieces || []
-    const index = this.pieceRenderer.hitTestTray(x, y, pieces)
 
-    if (index !== null) {
-      this.isDragging = true
-      this.dragIndex = index
-      this.dragPos = { x, y }
-      this.hoverIndex = null
-      this.onHoverChange?.(null)
+    this.tapStartTime = Date.now()
+    this.tapStartClientX = e.clientX
+    this.tapStartClientY = e.clientY
+
+    if (this.selectedIndex !== null) {
+      // A piece is already tap-selected — figure out what user tapped
+      const trayHit = this.pieceRenderer.hitTestTray(x, y, pieces)
+      if (trayHit !== null) {
+        // Tapped a tray slot — start drag (tap-end will decide select vs drag)
+        this.isDragging = true
+        this.dragIndex = trayHit
+        this.dragPos = { x, y }
+        this.lastGhostValid = null
+        this.onHoverChange?.(null)
+      } else {
+        // Tapped on board — start board-tap placement
+        const gridPos = this.gridRenderer.screenToGrid(e.clientX, e.clientY)
+        if (gridPos) {
+          this.placingViaTap = true
+          const shape = pieces[this.selectedIndex]
+          if (shape) {
+            const isValid = this.canPlace(shape, gridPos.row, gridPos.col)
+            this.ghostPos = gridPos
+            ;(window as any).activeGhost = { ...gridPos, valid: isValid }
+          }
+        } else {
+          // Tapped completely outside — deselect
+          this.selectedIndex = null
+          this.ghostPos = null
+          ;(window as any).activeGhost = null
+        }
+      }
+    } else {
+      // No selection — normal tray drag-start
+      const index = this.pieceRenderer.hitTestTray(x, y, pieces)
+      if (index !== null) {
+        this.isDragging = true
+        this.dragIndex = index
+        this.dragPos = { x, y }
+        this.hoverIndex = null
+        this.lastGhostValid = null
+        this.onHoverChange?.(null)
+      }
     }
   }
 
   private handleMove(e: MouseEvent | Touch) {
+    if (this.destroyed) return
     const rect = this.canvas.getBoundingClientRect()
     const x = (e.clientX - rect.left) * (this.canvas.width / rect.width)
     const y = (e.clientY - rect.top) * (this.canvas.height / rect.height)
+    const pieces = (window as any).currentPieces || []
 
-    if (this.destroyed) return
-
-    if (!this.isDragging || this.dragIndex === null) {
-      const pieces = (window as any).currentPieces || []
-      const hovered = this.pieceRenderer.hitTestTray(x, y, pieces)
-      if (hovered !== this.hoverIndex) {
-        this.hoverIndex = hovered
-        this.onHoverChange?.(hovered)
-      }
+    // Board-tap placement — ghost follows finger on the board directly
+    if (this.placingViaTap && this.selectedIndex !== null) {
+      const shape = pieces[this.selectedIndex]
+      if (shape) this.updateGhost(shape, e.clientX, e.clientY, false)
       return
     }
 
-    this.dragPos = { x, y }
-
-    // Offset for ghost prediction (above finger)
-    // Pass raw client coordinates to screenToGrid which handles its own rect subtraction
-    const ghostGridPos = this.gridRenderer.screenToGrid(e.clientX, e.clientY - 40)
-    
-    if (ghostGridPos) {
-      const shape = (window as any).currentPieces[this.dragIndex]
+    // Active drag
+    if (this.isDragging && this.dragIndex !== null) {
+      this.dragPos = { x, y }
+      const shape = pieces[this.dragIndex]
       if (!shape) {
-        this.ghostPos = null;
-        ;(window as any).activeGhost = null;
-        return;
+        this.ghostPos = null
+        ;(window as any).activeGhost = null
+        return
       }
-      const isValid = this.canPlace(shape, ghostGridPos.row, ghostGridPos.col)
-      this.ghostPos = ghostGridPos;
-      
-      // Update ghost in renderer
-      // We pass it to the state management layer usually, but for MVP we hit renderer direct
-      ;(window as any).activeGhost = { ...ghostGridPos, valid: isValid }
-    } else {
-      this.ghostPos = null;
-      ;(window as any).activeGhost = null;
+      this.updateGhost(shape, e.clientX, e.clientY, true)
+      return
+    }
+
+    // Idle with selection — ghost tracks cursor/finger (desktop hover + mobile prep)
+    if (this.selectedIndex !== null) {
+      const shape = pieces[this.selectedIndex]
+      if (shape) this.updateGhost(shape, e.clientX, e.clientY, true)
+      return
+    }
+
+    // Idle without selection — tray hover highlight
+    const hovered = this.pieceRenderer.hitTestTray(x, y, pieces)
+    if (hovered !== this.hoverIndex) {
+      this.hoverIndex = hovered
+      this.onHoverChange?.(hovered)
     }
   }
 
   private handleEnd(e: MouseEvent | Touch) {
-    if (this.destroyed || !this.isDragging || this.dragIndex === null) return
+    if (this.destroyed) return
 
-    if (this.ghostPos) {
-      // @ts-ignore
-      const shape = (window as any).currentPieces[this.dragIndex]
-      if (shape && this.canPlace(shape, this.ghostPos.row, this.ghostPos.col)) {
-        this.onPlace(this.dragIndex, this.ghostPos.row, this.ghostPos.col)
+    // ── Board-tap placement ──────────────────────────────────────────────
+    if (this.placingViaTap) {
+      this.placingViaTap = false
+      if (this.selectedIndex !== null && this.ghostPos) {
+        const pieces = (window as any).currentPieces || []
+        const shape = pieces[this.selectedIndex]
+        if (shape && this.tryPlace(this.selectedIndex, this.ghostPos, shape)) {
+          this.selectedIndex = null
+        }
       }
+      this.ghostPos = null
+      this.lastGhostValid = null
+      ;(window as any).activeGhost = null
+      return
+    }
+
+    // ── Drag end ─────────────────────────────────────────────────────────
+    if (!this.isDragging || this.dragIndex === null) return
+
+    const pieces = (window as any).currentPieces || []
+    const shape = pieces[this.dragIndex]
+    const wasTap = this.isTap(e.clientX, e.clientY)
+
+    if (wasTap) {
+      // Quick tap — toggle selection
+      if (this.selectedIndex === this.dragIndex) {
+        // Tap same piece again → deselect
+        this.selectedIndex = null
+        this.ghostPos = null
+        ;(window as any).activeGhost = null
+      } else {
+        // Select this piece (switch if another was selected)
+        this.selectedIndex = this.dragIndex
+      }
+    } else {
+      // Real drag — drop with snap
+      if (shape && this.ghostPos) {
+        if (this.tryPlace(this.dragIndex, this.ghostPos, shape)) {
+          this.selectedIndex = null
+        }
+      }
+      this.ghostPos = null
+      ;(window as any).activeGhost = null
     }
 
     this.isDragging = false
     this.dragIndex = null
-    this.ghostPos = null
     this.hoverIndex = null
+    this.lastGhostValid = null
     this.onHoverChange?.(null)
-    // @ts-ignore
-    window.activeGhost = null
   }
 
   getDragState() {
     return {
       isDragging: this.isDragging,
       dragIndex: this.dragIndex,
-      dragPos: this.dragPos
+      dragPos: this.dragPos,
+      selectedIndex: this.selectedIndex,
     }
   }
 }

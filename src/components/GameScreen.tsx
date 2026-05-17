@@ -742,12 +742,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
       gridRenderer,
       pieceRenderer,
       (pieceIndex: number, row: number, col: number) => {
+        // Capture shape before state mutation so we know which cells were placed
+        const preShape = useGameStore.getState().gameSession?.currentPieces[pieceIndex]
         const result = useGameStore.getState().placePiece(pieceIndex, row, col)
         if (!result?.success) {
           hapticError()
           return
         }
         hapticImpact()
+        // Brief drop-flash on placed cells
+        if (preShape) {
+          const placedCells = (preShape.cells as [number, number][])
+            .map(([dr, dc]) => ({ row: row + dr, col: col + dc }))
+            .filter((c) => c.row >= 0 && c.row < 9 && c.col >= 0 && c.col < 9)
+          animManager.trigger('DROP_FLASH', { cells: placedCells })
+        }
         const linesCleared = result.linesCleared
         if (
           linesCleared &&
@@ -815,12 +824,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
         valid: boolean
       } | null
       const dragState = touchController.getDragState()
+      const activeIdx = dragState.isDragging && dragState.dragIndex !== null ? dragState.dragIndex : null
+      const selectedIdx = dragState.selectedIndex ?? null
       let ghostCells: { row: number; col: number; valid: boolean }[] | undefined
 
-      if (ghost && dragState.isDragging && dragState.dragIndex !== null) {
-        const shape = currentSession.currentPieces[dragState.dragIndex]
+      if (ghost && (activeIdx !== null || selectedIdx !== null)) {
+        const idx = activeIdx ?? selectedIdx!
+        const shape = currentSession.currentPieces[idx]
         if (shape) {
-          ghostCells = shape.cells
+          ghostCells = (shape.cells as [number, number][])
             .map(([dr, dc]) => ({
               row: ghost.row + dr,
               col: ghost.col + dc,
@@ -836,13 +848,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       gridRenderer.draw(currentSession.grid, ghostCells, false)
       pieceRenderer.drawTray(
         currentSession.currentPieces,
-        dragState.isDragging && dragState.dragIndex !== null
-          ? dragState.dragIndex
-          : undefined,
+        activeIdx ?? undefined,
         false,
-        dragState.isDragging
-          ? undefined
-          : (trayHoverIndexRef.current ?? undefined)
+        activeIdx !== null ? undefined : (trayHoverIndexRef.current ?? undefined),
+        selectedIdx ?? undefined
       )
 
       if (dragState.isDragging && dragState.dragIndex !== null) {

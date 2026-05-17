@@ -29,36 +29,22 @@ export const TOURNAMENT_PALETTE = {
 const getThemeColor = (name: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
-const withAlpha = (color: string, alpha: number) => {
-  if (color.startsWith('#')) {
-    const normalized = color.length === 4
-      ? color
-          .slice(1)
-          .split('')
-          .map((part) => part + part)
-          .join('')
-      : color.slice(1)
-    const r = Number.parseInt(normalized.slice(0, 2), 16)
-    const g = Number.parseInt(normalized.slice(2, 4), 16)
-    const b = Number.parseInt(normalized.slice(4, 6), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-  }
-  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`
-}
-
 export class GridRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private gridSize: number
   private cellSize: number
-  private stripeCache: { valid?: CanvasPattern; invalid?: CanvasPattern } = {}
-  private stripeThemeKey = ''
 
   constructor(canvas: HTMLCanvasElement, gridSize: number) {
     this.canvas = canvas
     this.ctx = canvas.getContext('2d')!
     this.gridSize = gridSize
     this.cellSize = gridSize / 9
+  }
+
+  getCellSizeInScreen(): number {
+    const rect = this.canvas.getBoundingClientRect()
+    return rect.width / 9
   }
 
   draw(
@@ -73,12 +59,6 @@ export class GridRenderer {
     const empty = css.getPropertyValue('--empty-cell').trim()
     const ink = css.getPropertyValue('--ink').trim()
     const rule = css.getPropertyValue('--rule').trim()
-    const accent = css.getPropertyValue('--accent').trim()
-    const stripeThemeKey = `${accent}|${ink}`
-    if (stripeThemeKey !== this.stripeThemeKey) {
-      this.stripeThemeKey = stripeThemeKey
-      this.stripeCache = {}
-    }
 
     // Board background
     this.ctx.fillStyle = bg
@@ -119,6 +99,36 @@ export class GridRenderer {
       this.ctx.moveTo(3, pos)
       this.ctx.lineTo(this.gridSize - 3, pos)
       this.ctx.stroke()
+    }
+
+    // Row/column completion hint — highlight lines that would clear on placement
+    if (ghostCells && ghostCells.length > 0 && ghostCells[0].valid) {
+      const ghostSet = new Set(ghostCells.map((g) => `${g.row},${g.col}`))
+      this.ctx.fillStyle = 'rgba(180, 255, 80, 0.15)'
+      for (let r = 0; r < 9; r++) {
+        let willComplete = true
+        for (let c = 0; c < 9; c++) {
+          if (Grid.getCell(grid, r, c) === 0 && !ghostSet.has(`${r},${c}`)) {
+            willComplete = false
+            break
+          }
+        }
+        if (willComplete) {
+          this.ctx.fillRect(3, r * this.cellSize + 3, this.gridSize - 6, this.cellSize - 6)
+        }
+      }
+      for (let c = 0; c < 9; c++) {
+        let willComplete = true
+        for (let r = 0; r < 9; r++) {
+          if (Grid.getCell(grid, r, c) === 0 && !ghostSet.has(`${r},${c}`)) {
+            willComplete = false
+            break
+          }
+        }
+        if (willComplete) {
+          this.ctx.fillRect(c * this.cellSize + 3, 3, this.cellSize - 6, this.gridSize - 6)
+        }
+      }
     }
 
     // Ghost preview
@@ -176,42 +186,22 @@ export class GridRenderer {
     const size = this.cellSize - pad * 2
     if (size <= 0) return
 
-    const key = valid ? 'valid' : 'invalid'
-    if (!this.stripeCache[key]) {
-      const pat = this.createStripePattern(valid)
-      if (pat) this.stripeCache[key] = pat
-    }
-
-    const pattern = this.stripeCache[key]
-    if (pattern) {
-      this.ctx.fillStyle = pattern
+    if (valid) {
+      this.ctx.fillStyle = 'rgba(140, 255, 60, 0.48)'
       this.ctx.fillRect(x, y, size, size)
+      this.ctx.strokeStyle = 'rgba(80, 220, 30, 0.95)'
+      this.ctx.lineWidth = 2
+      this.ctx.setLineDash([])
+      this.ctx.strokeRect(x + 1, y + 1, size - 2, size - 2)
+    } else {
+      this.ctx.fillStyle = 'rgba(255, 55, 55, 0.32)'
+      this.ctx.fillRect(x, y, size, size)
+      this.ctx.strokeStyle = 'rgba(220, 30, 30, 0.75)'
+      this.ctx.lineWidth = 2
+      this.ctx.setLineDash([4, 3])
+      this.ctx.strokeRect(x, y, size, size)
+      this.ctx.setLineDash([])
     }
-
-    this.ctx.setLineDash([3, 3])
-    this.ctx.strokeStyle = getThemeColor('--ink')
-    this.ctx.lineWidth = 2
-    this.ctx.strokeRect(x, y, size, size)
-    this.ctx.setLineDash([])
-  }
-
-  private createStripePattern(valid: boolean): CanvasPattern | null {
-    const pc = document.createElement('canvas')
-    pc.width = 8
-    pc.height = 8
-    const pCtx = pc.getContext('2d')!
-    const accent = getThemeColor('--accent')
-    pCtx.fillStyle = withAlpha(accent, valid ? 0.4 : 0.22)
-    pCtx.fillRect(0, 0, 8, 8)
-    pCtx.strokeStyle = withAlpha(getThemeColor('--ink'), valid ? 0.22 : 0.3)
-    pCtx.lineWidth = 2
-    pCtx.beginPath()
-    pCtx.moveTo(-1, 6)
-    pCtx.lineTo(6, -1)
-    pCtx.moveTo(1, 10)
-    pCtx.lineTo(10, 1)
-    pCtx.stroke()
-    return this.ctx.createPattern(pc, 'repeat')
   }
 
   getCellSize(): number {
@@ -221,7 +211,6 @@ export class GridRenderer {
   resize(gridSize: number): void {
     this.gridSize = gridSize
     this.cellSize = gridSize / 9
-    this.stripeCache = {}
   }
 
   get currentGridSize(): number {

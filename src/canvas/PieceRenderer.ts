@@ -21,7 +21,8 @@ export class PieceRenderer {
     pieces: (ShapeDefinition | null)[],
     activeIndex?: number,
     isTournament: boolean = false,
-    hoveredIndex?: number
+    hoveredIndex?: number,
+    selectedIndex?: number
   ): void {
     const slotWidth = this.canvasWidth / 3
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
@@ -40,13 +41,38 @@ export class PieceRenderer {
         this.ctx.stroke()
       }
 
-      if (!shape || index === activeIndex) {
-        // Empty slot — transparent so HTML yellow bg shows through
+      const isSelected = index === selectedIndex
+      const isDragging = index === activeIndex
+
+      // Draw selection highlight behind the piece
+      if (isSelected) {
+        const pad = 6
+        this.ctx.fillStyle = 'rgba(180, 255, 60, 0.18)'
+        this.ctx.fillRect(
+          index * slotWidth + pad,
+          this.trayY + pad,
+          slotWidth - pad * 2,
+          slotWidth - pad * 2
+        )
+        this.ctx.strokeStyle = 'rgba(120, 230, 40, 0.95)'
+        this.ctx.lineWidth = 3
+        this.ctx.setLineDash([])
+        this.ctx.strokeRect(
+          index * slotWidth + pad,
+          this.trayY + pad,
+          slotWidth - pad * 2,
+          slotWidth - pad * 2
+        )
+      }
+
+      if (!shape || isDragging) {
+        // Empty slot or actively dragging — transparent so tray bg shows through
         return
       }
 
       const color = palette[shape.colorId as keyof typeof palette]
-      const scale = 0.6 * (hoveredIndex === index ? 1.05 : 1)
+      const baseScale = isSelected ? 0.65 : 0.6
+      const scale = baseScale * (hoveredIndex === index ? 1.05 : 1)
       const displayCellSize = this.cellSize * scale
       const pieceWidth = shape.width * displayCellSize
       const pieceHeight = shape.height * displayCellSize
@@ -54,10 +80,10 @@ export class PieceRenderer {
       const y = this.trayY + (slotWidth - pieceHeight) / 2
 
       this.ctx.save()
-      this.ctx.shadowColor = 'rgba(0,0,0,0.15)'
-      this.ctx.shadowOffsetX = 2
-      this.ctx.shadowOffsetY = 2
-      this.ctx.shadowBlur = 0
+      this.ctx.shadowColor = isSelected ? 'rgba(100,220,30,0.4)' : 'rgba(0,0,0,0.15)'
+      this.ctx.shadowOffsetX = isSelected ? 0 : 2
+      this.ctx.shadowOffsetY = isSelected ? 0 : 2
+      this.ctx.shadowBlur = isSelected ? 8 : 0
       this.drawShape(shape, x, y, displayCellSize, color)
       this.ctx.restore()
     })

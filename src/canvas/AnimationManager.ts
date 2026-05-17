@@ -1,4 +1,4 @@
-export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP'
+export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP' | 'DROP_FLASH'
 
 interface Animation {
   type: AnimationType
@@ -25,7 +25,7 @@ export class AnimationManager {
   private animations: Animation[] = []
 
   trigger(type: AnimationType, params: any): void {
-    const duration = type === 'COMBO' ? 800 : type === 'LINE_CLEAR' ? 500 : 300
+    const duration = type === 'COMBO' ? 800 : type === 'LINE_CLEAR' ? 500 : type === 'DROP_FLASH' ? 220 : 300
     this.animations.push({ type, progress: 0, duration, params })
   }
 
@@ -75,6 +75,22 @@ export class AnimationManager {
         cols?.forEach((c: number) => {
           ctx.fillRect(c * cellSize, 0, cellSize, 9 * cellSize)
         })
+      } else if (anim.type === 'DROP_FLASH') {
+        const { cells } = anim.params as { cells: { row: number; col: number }[] }
+        // Bright white flash that fades out quickly — confirms the drop landed
+        const alpha = Math.max(0, 0.55 * (1 - anim.progress * 1.6))
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`
+        for (const { row, col } of cells) {
+          ctx.fillRect(col * cellSize + 1, row * cellSize + 1, cellSize - 2, cellSize - 2)
+        }
+        // Lime outline that lingers slightly longer
+        const outlineAlpha = Math.max(0, 0.8 * (1 - anim.progress))
+        ctx.strokeStyle = `rgba(140, 255, 60, ${outlineAlpha})`
+        ctx.lineWidth = 2.5
+        ctx.setLineDash([])
+        for (const { row, col } of cells) {
+          ctx.strokeRect(col * cellSize + 1.5, row * cellSize + 1.5, cellSize - 3, cellSize - 3)
+        }
       } else if (anim.type === 'SCORE') {
         const { x, y, score } = anim.params
         const inkColor = getThemeColor('--ink')
