@@ -38,6 +38,8 @@ import {
   clearStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
+import { getScoreTier } from '../engine/scoring'
+import type { TierInfo } from '../engine/scoring'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -417,6 +419,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const lastTimeRef = useRef<number>(0)
   const trayHoverIndexRef = useRef<number | null>(null)
   const cellSizeRef = useRef<number>(0)
+  const currentTierRef = useRef<TierInfo>(getScoreTier(0))
 
   const {
     gameSession,
@@ -471,6 +474,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
     }
   }, [isGameOver, score])
+
+  // Revert to default tier (PAPER) when game ends so the game-over screen
+  // and any subsequent lobby state always show the base cream/yellow look.
+  React.useEffect(() => {
+    if (isGameOver) {
+      currentTierRef.current = getScoreTier(0)
+      document.documentElement.setAttribute('data-tier', '0')
+    }
+  }, [isGameOver])
 
   const bestScore = React.useMemo(() => {
     const entries = (lbData ?? []) as readonly { player: `0x${string}`; score: number; gameId: bigint }[]
@@ -566,6 +578,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
+    // Reset tier to T1 (PAPER) on new game
+    const freshTier = getScoreTier(0)
+    currentTierRef.current = freshTier
+    document.documentElement.setAttribute('data-tier', '0')
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
     if (
@@ -712,6 +728,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const pieceRenderer = new PieceRenderer(canvas, init.trayY, init.cellSize)
     const animManager = animManagerRef.current
 
+    // Apply initial tier
+    const initialTier = getScoreTier(useGameStore.getState().score ?? 0)
+    currentTierRef.current = initialTier
+    gridRenderer.setTier(initialTier)
+    pieceRenderer.setTier(initialTier)
+    document.documentElement.setAttribute('data-tier', String(initialTier.id))
+
     // ResizeObserver keeps canvas sized to container
     let ro: ResizeObserver | null = null
     if (boardContainerRef.current) {
@@ -766,6 +789,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           animManager.trigger('LINE_CLEAR', {
             rows: linesCleared.rows,
             cols: linesCleared.cols,
+            accent: currentTierRef.current.accent,
           })
           if (result.scoreEvent && result.scoreEvent.newComboStreak > 0) {
             animManager.trigger('COMBO', {
@@ -812,11 +836,41 @@ const GameScreen: React.FC<GameScreenProps> = ({
       lastTimeRef.current = timestamp
       animManager.update(delta)
 
+      // Update time for animated tier effects
+      const tSec = timestamp / 1000
+      gridRenderer.setTime(tSec)
+      pieceRenderer.setTime(tSec)
+
       const ctx = canvas.getContext('2d')!
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
+
+      // Tier sync — use session.score, NOT store.score.
+      // store.score lags on game reset (still holds the previous game's value
+      // when a new session starts at 0), which caused the old tier to
+      // immediately re-apply at the start of every new game.
+      if (!currentSession.isGameOver) {
+        const newTier = getScoreTier(currentSession.score)
+        if (newTier.id !== currentTierRef.current.id) {
+          const prevTier = currentTierRef.current
+          currentTierRef.current = newTier
+          document.documentElement.setAttribute('data-tier', String(newTier.id))
+          // Only trigger TIER_UP banner when score genuinely increased
+          if (newTier.id > prevTier.id) {
+            animManager.trigger('TIER_UP', {
+              tierName: newTier.name,
+              accent: newTier.accent,
+            })
+          }
+        }
+      }
+      // Always push the current tier into renderers every frame so a reset
+      // (currentTierRef snapped to PAPER in handleStartGame / isGameOver effect)
+      // is reflected immediately without waiting for a score-change event.
+      gridRenderer.setTier(currentTierRef.current)
+      pieceRenderer.setTier(currentTierRef.current)
 
       const ghost = (window as any).activeGhost as {
         row: number

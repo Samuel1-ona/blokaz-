@@ -172,3 +172,126 @@
   --combo-burst-strong: color-mix(in srgb, var(--accent) 30%, transparent);
   --game-over-shadow: var(--accent);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   SCORE TIER OVERRIDES
+   Applied via data-tier="N" on the root element.
+   Each tier shifts the accent, tray, and board atmosphere.
+   Piece colours are unchanged — only the surrounding chrome.
+   ───────────────────────────────────────────────────────────── */
+
+/* T1 PAPER (0–500) — default cream, yellow accent (already covered by :root) */
+[data-tier='0'] {
+  --accent:          #ffd51f;
+  --accent-2:        #ffb800;
+  --accent-soft:     #b7ff3b;
+  --label:           #ffd51f;
+  --hero:            #ff7a1a;
+  --piece-tray-bg:   #ffd51f;
+  --board:           #fffaf0;
+  --empty-cell:      #fff6e8;
+  --combo-burst-strong: rgba(255,213,31,0.33);
+  --game-over-shadow: #ffd51f;
+}
+
+/* T2 STICKER (500–1,500) — flow channel, widest window, pink vinyl energy */
+[data-tier='1'] {
+  --accent:          #ff3bbd;
+  --accent-2:        #ff6dd1;
+  --accent-soft:     #ffb8e8;
+  --label:           #ff3bbd;
+  --hero:            #ff3bbd;
+  --piece-tray-bg:   #ff3bbd;
+  --board:           #fff0f8;
+  --empty-cell:      #ffe8f4;
+  --combo-burst-strong: rgba(255,59,189,0.28);
+  --game-over-shadow: #ff3bbd;
+}
+
+/* T3 STRIPED (1,500–4,000) — mastery gate, bold orange energy */
+[data-tier='2'] {
+  --accent:          #ff7a1a;
+  --accent-2:        #ff9a48;
+  --accent-soft:     #ffd5a8;
+  --label:           #ff7a1a;
+  --hero:            #ff7a1a;
+  --piece-tray-bg:   #ff7a1a;
+  --board:           #fff5ee;
+  --empty-cell:      #ffede0;
+  --combo-burst-strong: rgba(255,122,26,0.28);
+  --game-over-shadow: #ff7a1a;
+}
+
+/* T4 PIXEL (4,000–9,000) — elite territory, lime 8-bit pop */
+[data-tier='3'] {
+  --accent:          #b7ff3b;
+  --accent-2:        #d4ff7a;
+  --accent-soft:     #e8ffb8;
+  --label:           #b7ff3b;
+  --hero:            #7acc00;
+  --piece-tray-bg:   #b7ff3b;
+  --board:           #f4ffe0;
+  --empty-cell:      #ecffcc;
+  --combo-burst-strong: rgba(183,255,59,0.28);
+  --game-over-shadow: #b7ff3b;
+}
+
+/* T5 NEON (9,000–20,000) — dark rupture, most impactful light→dark shift */
+[data-tier='4'] {
+  --accent:          #29e6e6;
+  --accent-2:        #60f0f0;
+  --accent-soft:     #29e6e6;
+  --label:           #29e6e6;
+  --hero:            #00b8b8;
+  --piece-tray-bg:   #0c0c10;
+  --board:           #06141a;
+  --empty-cell:      #0a1e26;
+  --rule:            rgba(41,230,230,0.1);
+  --combo-burst-strong: rgba(41,230,230,0.3);
+  --game-over-shadow: #29e6e6;
+}
+
+/* T6 COSMIC (20,000–45,000) — double-digit-thousand club, deep space purple */
+[data-tier='5'] {
+  --accent:          #8a3dff;
+  --accent-2:        #aa70ff;
+  --accent-soft:     #c8b5ff;
+  --label:           #8a3dff;
+  --hero:            #6000cc;
+  --piece-tray-bg:   #0c0010;
+  --board:           #08020e;
+  --empty-cell:      #10061a;
+  --rule:            rgba(138,61,255,0.12);
+  --combo-burst-strong: rgba(138,61,255,0.3);
+  --game-over-shadow: #8a3dff;
+}
+
+/* T7 LIQUID (45,000–100,000) — near-impossible, deep ocean cyan */
+[data-tier='6'] {
+  --accent:          #29e6e6;
+  --accent-2:        #60f0f0;
+  --accent-soft:     #a0f8f8;
+  --label:           #29e6e6;
+  --hero:            #007a7a;
+  --piece-tray-bg:   #041418;
+  --board:           #03111a;
+  --empty-cell:      #061820;
+  --rule:            rgba(41,230,230,0.08);
+  --combo-burst-strong: rgba(41,230,230,0.3);
+  --game-over-shadow: #29e6e6;
+}
+
+/* T8 GLITCH (100,000+) — legendary, seen by <1% of players */
+[data-tier='7'] {
+  --accent:          #ff3bbd;
+  --accent-2:        #ff6dd1;
+  --accent-soft:     #ffb8e8;
+  --label:           #ff3bbd;
+  --hero:            #cc0088;
+  --piece-tray-bg:   #0c0010;
+  --board:           #080010;
+  --empty-cell:      #0e0018;
+  --rule:            rgba(255,59,189,0.1);
+  --combo-burst-strong: rgba(255,59,189,0.35);
+  --game-over-shadow: #ff3bbd;
+}

@@ -44,7 +44,7 @@ export default defineConfig({
     allowedHosts: [
       'aptly-letter-rocklike.ngrok-free.dev',
       'd6c4-102-91-103-49.ngrok-free.app',
-      '2042-2c0f-f5c0-802-19f2-b1a7-2247-709b-4484.ngrok-free.app',
+      '8d70-102-91-96-170.ngrok-free.app',
       'all',
     ],
   },
