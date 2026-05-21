@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAccount, useBalance, useWriteContract } from 'wagmi'
+import { useAccount, useBalance, useWalletClient } from 'wagmi'
+import { encodeFunctionData } from 'viem'
 import {
   GAME_TREASURY,
   STABLECOIN_TOKENS,
@@ -32,9 +33,9 @@ export function isMiniPayBrowser(): boolean {
 export function useStablecoinRevive() {
   const { address } = useAccount()
   const { reviveGame, reviveCount } = useGameStore()
-  const { writeContractAsync } = useWriteContract()
-  const writeRef = useRef(writeContractAsync)
-  useEffect(() => { writeRef.current = writeContractAsync }, [writeContractAsync])
+  const { data: walletClient } = useWalletClient()
+  const walletRef = useRef(walletClient)
+  useEffect(() => { walletRef.current = walletClient }, [walletClient])
 
   const [isPaying, setIsPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,21 +87,24 @@ export function useStablecoinRevive() {
 
   const payForRevive = useCallback(
     async (sym: StablecoinSymbol): Promise<boolean> => {
-      if (!address || isPayingRef.current) return false
+      if (!address || !walletRef.current || isPayingRef.current) return false
       isPayingRef.current = true
       setIsPaying(true)
       setError(null)
       try {
         const token = STABLECOIN_TOKENS[sym]
-        const txOverrides = isMiniPay()
-          ? { type: 'legacy' as const }
-          : {}
-        await writeRef.current({
-          address: token.address,
-          abi: ERC20_TRANSFER_ABI,
-          functionName: 'transfer',
-          args: [GAME_TREASURY, getReviveCost(sym)],
-          ...txOverrides,
+        // Use sendTransaction directly to bypass wagmi's eth_call simulation,
+        // which throws UnknownRpcError on MiniPay's injected provider.
+        await walletRef.current.sendTransaction({
+          to: token.address,
+          data: encodeFunctionData({
+            abi: ERC20_TRANSFER_ABI,
+            functionName: 'transfer',
+            args: [GAME_TREASURY, getReviveCost(sym)],
+          }),
+          // MiniPay requires legacy txs and an explicit gas limit so it never
+          // calls eth_estimateGas (which it also doesn't support in sandbox).
+          ...(isMiniPay() ? { type: 'legacy' as const, gas: 100_000n } : {}),
         })
         reviveGame()
         return true
@@ -113,7 +117,7 @@ export function useStablecoinRevive() {
         setIsPaying(false)
       }
     },
-    [address, reviveGame]
+    [address, reviveGame, getReviveCost]
   )
 
   return {
