@@ -87,25 +87,33 @@ export function useStablecoinRevive() {
 
   const payForRevive = useCallback(
     async (sym: StablecoinSymbol): Promise<boolean> => {
-      if (!address || !walletRef.current || isPayingRef.current) return false
+      if (!address || isPayingRef.current) return false
       isPayingRef.current = true
       setIsPaying(true)
       setError(null)
       try {
         const token = STABLECOIN_TOKENS[sym]
-        // Use sendTransaction directly to bypass wagmi's eth_call simulation,
-        // which throws UnknownRpcError on MiniPay's injected provider.
-        await walletRef.current.sendTransaction({
-          to: token.address,
-          data: encodeFunctionData({
-            abi: ERC20_TRANSFER_ABI,
-            functionName: 'transfer',
-            args: [GAME_TREASURY, getReviveCost(sym)],
-          }),
-          // MiniPay requires legacy txs and an explicit gas limit so it never
-          // calls eth_estimateGas (which it also doesn't support in sandbox).
-          ...(isMiniPay() ? { type: 'legacy' as const, gas: 100_000n } : {}),
+        const data = encodeFunctionData({
+          abi: ERC20_TRANSFER_ABI,
+          functionName: 'transfer',
+          args: [GAME_TREASURY, getReviveCost(sym)],
         })
+
+        if (isMiniPay()) {
+          // Bypass viem/wagmi entirely for MiniPay. Even sendTransaction calls
+          // eth_gasPrice internally to fill in the gas price, which fails in
+          // MiniPay's production provider with UnknownRpcError. Raw
+          // eth_sendTransaction skips every preflight — no eth_call, no
+          // eth_estimateGas, no eth_gasPrice.
+          await (window.ethereum as any).request({
+            method: 'eth_sendTransaction',
+            params: [{ from: address, to: token.address, data, gas: '0x186A0' }],
+          })
+        } else {
+          if (!walletRef.current) throw new Error('Wallet not connected')
+          await walletRef.current.sendTransaction({ to: token.address, data })
+        }
+
         reviveGame()
         return true
       } catch (err) {
