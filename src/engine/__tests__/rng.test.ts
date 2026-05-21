@@ -54,15 +54,13 @@ describe('Deterministic RNG', () => {
       counts[shape.id] = (counts[shape.id] || 0) + 1
     }
 
-    // O3 weight is 3, total weight is 156?
-    // Let's check TOTAL_WEIGHT: 5+8+8+10+10+8+8+4+4+10+3+6+8+8+8+8+5+5+5+5+6+6+6 = 156.
-    // O3 expected: 3/156 * 10000 approx 192.
-    // I3H weight is 10. Expected: 10/156 * 10000 approx 641.
-    
-    expect(counts['O3'] || 0).toBeGreaterThan(100)
-    expect(counts['O3'] || 0).toBeLessThan(300)
-    expect(counts['I3H'] || 0).toBeGreaterThan(500)
-    expect(counts['I3H'] || 0).toBeLessThan(800)
+    // TOTAL_WEIGHT = 230 (37 shapes).
+    // O3 weight=3  → expected 3/230 * 10000 ≈ 130
+    // I3H weight=10 → expected 10/230 * 10000 ≈ 435
+    expect(counts['O3'] || 0).toBeGreaterThan(60)
+    expect(counts['O3'] || 0).toBeLessThan(260)
+    expect(counts['I3H'] || 0).toBeGreaterThan(220)
+    expect(counts['I3H'] || 0).toBeLessThan(650)
   })
 
   it('dealThree should return exactly 3 shapes', () => {

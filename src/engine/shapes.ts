@@ -316,7 +316,7 @@ export const SHAPES: ShapeDefinition[] = [
     colorId: 4,
   },
 
-  // T-shape
+  // T-shapes (all 4 rotations)
   {
     id: 'T1',
     family: 'T',
@@ -332,8 +332,53 @@ export const SHAPES: ShapeDefinition[] = [
     spawnWeight: 6,
     colorId: 8,
   },
+  {
+    id: 'T2',
+    family: 'T',
+    cells: [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
+    width: 3,
+    height: 2,
+    cellCount: 4,
+    spawnWeight: 6,
+    colorId: 8,
+  },
+  {
+    id: 'T3',
+    family: 'T',
+    cells: [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+      [2, 1],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 6,
+    colorId: 8,
+  },
+  {
+    id: 'T4',
+    family: 'T',
+    cells: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [2, 0],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 6,
+    colorId: 8,
+  },
 
-  // Zigzag
+  // Zigzag — horizontal and vertical variants
   {
     id: 'S1Z',
     family: 'zigzag',
@@ -363,6 +408,183 @@ export const SHAPES: ShapeDefinition[] = [
     cellCount: 4,
     spawnWeight: 6,
     colorId: 9,
+  },
+  {
+    id: 'S1ZV',
+    family: 'zigzag',
+    cells: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [2, 1],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 6,
+    colorId: 9,
+  },
+  {
+    id: 'Z1ZV',
+    family: 'zigzag',
+    cells: [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+      [2, 0],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 6,
+    colorId: 9,
+  },
+
+  // Rectangle (3×2 companion to O23)
+  {
+    id: 'O32',
+    family: 'square',
+    cells: [
+      [0, 0],
+      [0, 1],
+      [0, 2],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
+    width: 3,
+    height: 2,
+    cellCount: 6,
+    spawnWeight: 6,
+    colorId: 3,
+  },
+
+  // 5-cell corner L — remaining 2 rotations (L3A=0°, L3D=270° already exist)
+  {
+    id: 'L3E',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [0, 1],
+      [0, 2],
+      [1, 0],
+      [2, 0],
+    ],
+    width: 3,
+    height: 3,
+    cellCount: 5,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+  {
+    id: 'L3F',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [0, 1],
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ],
+    width: 3,
+    height: 3,
+    cellCount: 5,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+
+  // L3B rotations (L3B=0° already exists)
+  {
+    id: 'L3G',
+    family: 'bigL',
+    cells: [
+      [0, 1],
+      [1, 1],
+      [2, 0],
+      [2, 1],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+  {
+    id: 'L3H',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
+    width: 3,
+    height: 2,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+  {
+    id: 'L3I',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [0, 1],
+      [1, 0],
+      [2, 0],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+
+  // L3C rotations (L3C=0° already exists)
+  {
+    id: 'L3J',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [0, 1],
+      [1, 1],
+      [2, 1],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+  {
+    id: 'L3K',
+    family: 'bigL',
+    cells: [
+      [0, 2],
+      [1, 0],
+      [1, 1],
+      [1, 2],
+    ],
+    width: 3,
+    height: 2,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
+  },
+  {
+    id: 'L3L',
+    family: 'bigL',
+    cells: [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [2, 1],
+    ],
+    width: 2,
+    height: 3,
+    cellCount: 4,
+    spawnWeight: 5,
+    colorId: 4,
   },
 ]
 

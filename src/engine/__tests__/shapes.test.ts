@@ -2,18 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { SHAPES, SHAPE_MAP, TOTAL_WEIGHT } from '../shapes'
 
 describe('Shape Catalog', () => {
-  it('should have all 23 shapes', () => {
-    expect(SHAPES.length).toBe(23)
+  it('should have all 37 shapes', () => {
+    expect(SHAPES.length).toBe(37)
     // Singles/Dominoes: S1, D1, D2 (3)
     // Lines: I3H, I3V, I4H, I4V, I5H, I5V (6)
-    // Squares: O2, O3, O23 (3)
+    // Squares: O2, O3, O23, O32 (4)
     // Small L: L2A, L2B, L2C, L2D (4)
-    // Big L: L3A, L3B, L3C, L3D (4)
-    // T: T1 (1)
-    // Zigzag: S1Z, Z1Z (2)
-    // Total: 3 + 6 + 3 + 4 + 4 + 1 + 2 = 23.
-    // Wait, the plan says "all 22 unique shape definitions". 
-    // Let me check the plan again.
+    // Big L: L3A–L3L (12)
+    // T: T1–T4 (4)
+    // Zigzag: S1Z, Z1Z, S1ZV, Z1ZV (4)
+    // Total: 3 + 6 + 4 + 4 + 12 + 4 + 4 = 37
   })
 
   it('cellCount should match cells.length for each shape', () => {
