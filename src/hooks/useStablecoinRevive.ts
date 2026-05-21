@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useBalance, useWalletClient } from 'wagmi'
-import { encodeFunctionData } from 'viem'
+import { createWalletClient, custom, encodeFunctionData } from 'viem'
+import { celo } from 'viem/chains'
 import {
   GAME_TREASURY,
   STABLECOIN_TOKENS,
@@ -21,6 +22,15 @@ const ERC20_TRANSFER_ABI = [
     outputs: [{ type: 'bool' }],
   },
 ] as const
+
+// feeCurrency adapter addresses — required for CIP-64 gas abstraction in MiniPay.
+// USDm: token address == feeCurrency. USDC/USDT need their adapter contracts;
+// passing the token address instead of the adapter will cause the tx to fail.
+const MINIPAY_FEE_CURRENCY: Record<StablecoinSymbol, `0x${string}`> = {
+  USDm:  '0x765DE816845861e75A25fCA122bb6898B8B1282a',
+  USDC:  '0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B',
+  USDT:  '0x0e2a3e05bc9a16f5292a6170456a710cb89c6f72',
+}
 
 export function isMiniPayBrowser(): boolean {
   try {
@@ -100,14 +110,22 @@ export function useStablecoinRevive() {
         })
 
         if (isMiniPay()) {
-          // Bypass viem/wagmi entirely for MiniPay. Even sendTransaction calls
-          // eth_gasPrice internally to fill in the gas price, which fails in
-          // MiniPay's production provider with UnknownRpcError. Raw
-          // eth_sendTransaction skips every preflight — no eth_call, no
-          // eth_estimateGas, no eth_gasPrice.
-          await (window.ethereum as any).request({
-            method: 'eth_sendTransaction',
-            params: [{ from: address, to: token.address, data, gas: '0x186A0' }],
+          // MiniPay requires CIP-64 transactions (not legacy or EIP-1559).
+          // Create a fresh viem walletClient directly on window.ethereum so gas
+          // estimation and fee abstraction go through MiniPay's injected provider
+          // rather than wagmi's fallback transport.
+          // feeCurrency tells MiniPay which token covers the network fee —
+          // USDC/USDT must use their adapter addresses, not the token address.
+          const client = createWalletClient({
+            chain: celo,
+            transport: custom(window.ethereum!),
+          })
+          const [sender] = await client.getAddresses()
+          await client.sendTransaction({
+            account: sender,
+            to: token.address,
+            data,
+            feeCurrency: MINIPAY_FEE_CURRENCY[sym],
           })
         } else {
           if (!walletRef.current) throw new Error('Wallet not connected')
