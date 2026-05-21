@@ -23,15 +23,6 @@ const ERC20_TRANSFER_ABI = [
   },
 ] as const
 
-// feeCurrency adapter addresses — required for CIP-64 gas abstraction in MiniPay.
-// USDm: token address == feeCurrency. USDC/USDT need their adapter contracts;
-// passing the token address instead of the adapter will cause the tx to fail.
-const MINIPAY_FEE_CURRENCY: Record<StablecoinSymbol, `0x${string}`> = {
-  USDm:  '0x765DE816845861e75A25fCA122bb6898B8B1282a',
-  USDC:  '0x2F25deB3848C207fc8E0c34035B3Ba7fC157602B',
-  USDT:  '0x0e2a3e05bc9a16f5292a6170456a710cb89c6f72',
-}
-
 export function isMiniPayBrowser(): boolean {
   try {
     return (window as any).ethereum?.isMiniPay === true
@@ -110,24 +101,20 @@ export function useStablecoinRevive() {
         })
 
         if (isMiniPay()) {
-          // MiniPay CIP-64: send via raw window.ethereum.request so viem never
-          // calls eth_estimateGas or eth_gasPrice(feeCurrency) — those RPC
-          // variants are not supported by MiniPay's injected provider in production.
-          // We pass feeCurrency so MiniPay deducts gas from the chosen stablecoin.
-          // USDC/USDT must use their adapter addresses; USDm uses the token address.
-          const [sender] = await createWalletClient({
+          // Create a fresh walletClient on window.ethereum directly — wagmi's
+          // useWalletClient falls back to forno.celo.org for gas estimation which
+          // causes UnknownRpcError in MiniPay production. A fresh client with
+          // custom(window.ethereum) lets MiniPay's own provider handle gas natively.
+          // No feeCurrency needed: MiniPay manages gas abstraction automatically.
+          const client = createWalletClient({
             chain: celo,
             transport: custom(window.ethereum!),
-          }).getAddresses()
-          await (window.ethereum as any).request({
-            method: 'eth_sendTransaction',
-            params: [{
-              from: sender,
-              to: token.address,
-              data,
-              gas: '0x493E0', // 300 000 — covers ERC-20 transfer + feeCurrency overhead
-              feeCurrency: MINIPAY_FEE_CURRENCY[sym],
-            }],
+          })
+          const [sender] = await client.getAddresses()
+          await client.sendTransaction({
+            account: sender,
+            to: token.address,
+            data,
           })
         } else {
           if (!walletRef.current) throw new Error('Wallet not connected')
@@ -136,8 +123,12 @@ export function useStablecoinRevive() {
 
         reviveGame()
         return true
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Transaction failed'
+      } catch (err: any) {
+        console.error('Revive tx error:', err)
+        const msg =
+          err?.message ||
+          err?.data?.message ||
+          (typeof err === 'string' ? err : 'Transaction failed')
         setError(msg.length > 80 ? msg.slice(0, 80) + '…' : msg)
         return false
       } finally {
