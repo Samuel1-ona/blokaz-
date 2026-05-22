@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const TWITTER_URL = 'https://x.com/playblokaz'
-const TELEGRAM_URL = 'https://t.me/c/tweetlegg/1135'
+const TELEGRAM_URL = 'https://t.me/tweetlegg'
 
 // Show after every N games played
 const GAMES_BETWEEN_NUDGES = 3

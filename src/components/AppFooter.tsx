@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import LegalModal, { type LegalModalType } from './LegalModal'
 
-const TELEGRAM_SUPPORT = 'https://t.me/+ulIKRKsI1HYxNmQ0'
+const TELEGRAM_SUPPORT = 'https://t.me/tweetlegg'
 
 /**
  * Fixed bottom bar — always visible on screen, no scrolling required.

@@ -656,29 +656,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 </div>
               )}
 
-              {/* Fallback when game was never registered (start approval was skipped) */}
-              {!effectiveGameId && !isLoading && (
-                <div
-                  className="border-[3px] border-ink bg-paper-2 p-4"
-                  style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
-                >
-                  <div
-                    className="mb-1 flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.12em]"
-                    style={{ color: 'var(--ink)' }}
-                  >
-                    <BrutalIcon name="alert" size={11} strokeWidth={2.5} />
-                    SCORE NOT SAVED
-                  </div>
-                  <p
-                    className="font-body text-[11px] leading-relaxed"
-                    style={{ color: 'var(--ink-soft)' }}
-                  >
-                    Your game wasn't registered — the approval at the start was
-                    cancelled. Your score won't appear on the leaderboard, but
-                    you can play again.
-                  </p>
-                </div>
-              )}
 
               {/* Submit score CTA */}
               {signerError && (
