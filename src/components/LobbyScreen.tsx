@@ -710,77 +710,72 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         <Ticker />
       </FadeUp>
 
-      {/* Stats row */}
-      <FadeUp delay={260}>
-        <div
-          className="grid grid-cols-3 border-[3px] border-ink"
-          style={{ boxShadow: '5px 5px 0 var(--shadow)' }}
-        >
+      {/* Stats row — only rendered when there's at least one real value */}
+      {(shareScore > 0 || playerStats) && (
+        <FadeUp delay={260}>
           <div
-            className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
-            style={{ background: 'var(--paper)' }}
+            className="border-[3px] border-ink"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: [shareScore > 0, !!playerStats]
+                .filter(Boolean)
+                .map(() => '1fr')
+                .join(' '),
+              boxShadow: '5px 5px 0 var(--shadow)',
+            }}
           >
-            <span
-              className="mb-1 font-display text-[9px] tracking-[0.16em]"
-              style={{ color: 'var(--ink-fixed)' }}
-            >
-              BEST
-            </span>
-            <span
-              className="font-display"
-              style={{
-                letterSpacing: '-0.03em',
-                fontSize: 'clamp(16px,5.5vw,28px)',
-                color: 'var(--ink-fixed)',
-              }}
-            >
-              {playerStats ? animatedScore.toLocaleString() : '—'}
-            </span>
+            {shareScore > 0 && (
+              <div
+                className="flex flex-col items-center justify-center py-4"
+                style={{
+                  background: 'var(--paper)',
+                  borderRight: playerStats ? '3px solid var(--ink)' : undefined,
+                }}
+              >
+                <span
+                  className="mb-1 font-display text-[9px] tracking-[0.16em]"
+                  style={{ color: 'var(--ink-fixed)' }}
+                >
+                  BEST
+                </span>
+                <span
+                  className="font-display"
+                  style={{
+                    letterSpacing: '-0.03em',
+                    fontSize: 'clamp(16px,5.5vw,28px)',
+                    color: 'var(--ink-fixed)',
+                  }}
+                >
+                  {animatedScore > 0 ? animatedScore.toLocaleString() : shareScore.toLocaleString()}
+                </span>
+              </div>
+            )}
+            {playerStats && (
+              <div
+                className="flex flex-col items-center justify-center py-4"
+                style={{ background: 'var(--accent-pink)' }}
+              >
+                <span
+                  className="mb-1 font-display text-[9px] tracking-[0.16em]"
+                  style={{ color: 'var(--ink-fixed)' }}
+                >
+                  RANK
+                </span>
+                <span
+                  className="font-display"
+                  style={{
+                    letterSpacing: '-0.03em',
+                    fontSize: 'clamp(16px,5.5vw,28px)',
+                    color: 'var(--ink-fixed)',
+                  }}
+                >
+                  #{animatedRank}
+                </span>
+              </div>
+            )}
           </div>
-          <div
-            className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
-            style={{ background: 'var(--accent-pink)' }}
-          >
-            <span
-              className="mb-1 font-display text-[9px] tracking-[0.16em]"
-              style={{ color: 'var(--ink-fixed)' }}
-            >
-              RANK
-            </span>
-            <span
-              className="font-display"
-              style={{
-                letterSpacing: '-0.03em',
-                fontSize: 'clamp(16px,5.5vw,28px)',
-                color: 'var(--ink-fixed)',
-              }}
-            >
-              {playerStats ? `#${animatedRank}` : '—'}
-            </span>
-          </div>
-          <div
-            className="flex flex-col items-center justify-center py-4"
-            style={{ background: 'var(--accent-lime)' }}
-          >
-            <span
-              className="mb-1 font-display text-[9px] tracking-[0.16em]"
-              style={{ color: 'var(--ink-fixed)' }}
-            >
-              WON
-            </span>
-            <span
-              className="font-display"
-              style={{
-                letterSpacing: '-0.03em',
-                fontSize: 'clamp(16px,5.5vw,28px)',
-                color: 'var(--ink-fixed)',
-              }}
-            >
-              —
-            </span>
-          </div>
-        </div>
-      </FadeUp>
+        </FadeUp>
+      )}
 
       {/* Play Classic */}
       <FadeUp delay={340}>
