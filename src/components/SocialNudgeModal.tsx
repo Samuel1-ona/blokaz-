@@ -137,202 +137,215 @@ export const SocialNudgeModal: React.FC<SocialNudgeModalProps> = ({
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 8888,
-        background: 'rgba(12,12,16,0.72)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px 16px',
-        opacity: visible ? 1 : 0,
-        transition: 'opacity 220ms ease',
-      }}
-      onClick={handleDismiss}
-    >
+    <>
+      {/* Inline clamp so the card never overflows on tiny screens */}
+      <style>{`
+        .snm-card { max-width: min(380px, calc(100vw - 24px)); }
+        .snm-heading { font-size: clamp(20px, 6vw, 28px); }
+        .snm-body { font-size: clamp(12px, 3.5vw, 13px); }
+        .snm-cta { font-size: clamp(11px, 3vw, 13px); padding: clamp(11px, 3vw, 14px) 16px; }
+      `}</style>
+
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
-          width: '100%',
-          maxWidth: 380,
-          background: 'var(--paper, #f5efe3)',
-          border: '4px solid var(--ink, #0c0c10)',
-          boxShadow: '10px 10px 0 var(--ink, #0c0c10)',
+          position: 'fixed',
+          inset: 0,
+          zIndex: 8888,
+          background: 'rgba(12,12,16,0.72)',
+          backdropFilter: 'blur(4px)',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          transform: visible
-            ? 'translateY(0) scale(1)'
-            : 'translateY(16px) scale(0.97)',
-          transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          /* bottom-align on very short screens so shadow isn't clipped */
+          padding: '12px 12px 20px',
+          boxSizing: 'border-box',
+          opacity: visible ? 1 : 0,
+          transition: 'opacity 220ms ease',
         }}
+        onClick={handleDismiss}
       >
-        {/* ── Header ── */}
         <div
+          className="snm-card"
+          onClick={(e) => e.stopPropagation()}
           style={{
-            background: c.platformColor,
-            padding: '14px 18px',
+            width: '100%',
+            background: 'var(--paper, #f5efe3)',
+            border: '4px solid var(--ink, #0c0c10)',
+            /* shrink shadow on small screens so it stays visible */
+            boxShadow: '6px 6px 0 var(--ink, #0c0c10)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            transform: visible
+              ? 'translateY(0) scale(1)'
+              : 'translateY(16px) scale(0.97)',
+            transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1)',
           }}
         >
+          {/* ── Header ── */}
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              color: '#ffffff',
-            }}
-          >
-            {c.icon}
-            <span
-              style={{
-                fontFamily: '"Archivo Black", sans-serif',
-                fontSize: 11,
-                letterSpacing: '0.22em',
-                textTransform: 'uppercase',
-                color: '#ffffff',
-              }}
-            >
-              {c.platform}
-            </span>
-          </div>
-
-          {/* Close */}
-          <button
-            onClick={handleDismiss}
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              border: '2px solid rgba(255,255,255,0.4)',
-              color: '#ffffff',
-              width: 28,
-              height: 28,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: '"Archivo Black", sans-serif',
-              fontSize: 14,
-              cursor: 'pointer',
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* ── Accent bar ── */}
-        <div
-          style={{
-            height: 6,
-            background: '#ffd51f',
-            borderBottom: '3px solid var(--ink, #0c0c10)',
-          }}
-        />
-
-        {/* ── Body ── */}
-        <div style={{ padding: '22px 22px 20px' }}>
-          {/* Heading */}
-          <div
-            style={{
-              fontFamily: '"Archivo Black", sans-serif',
-              fontSize: 28,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.05,
-              color: 'var(--ink, #0c0c10)',
-              textTransform: 'uppercase',
-              marginBottom: 12,
-              whiteSpace: 'pre-line',
-            }}
-          >
-            {c.heading}
-          </div>
-
-          {/* Prize badge */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#ffd51f',
-              border: '3px solid var(--ink, #0c0c10)',
-              boxShadow: '3px 3px 0 var(--ink, #0c0c10)',
-              padding: '5px 12px',
-              fontFamily: '"Archivo Black", sans-serif',
-              fontSize: 10,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'var(--ink, #0c0c10)',
-              marginBottom: 14,
-            }}
-          >
-            <span>🏆</span> USDT PRIZE POOLS
-          </div>
-
-          {/* Body copy */}
-          <p
-            style={{
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 13,
-              lineHeight: 1.65,
-              color: 'var(--ink-soft, #2a2a33)',
-              margin: '0 0 20px',
-            }}
-          >
-            {c.body}
-          </p>
-
-          {/* Primary CTA */}
-          <button
-            onClick={handleFollow}
-            style={{
+              background: c.platformColor,
+              padding: '12px 16px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              width: '100%',
-              background: c.platformColor,
-              border: '4px solid var(--ink, #0c0c10)',
-              boxShadow: '6px 6px 0 var(--ink, #0c0c10)',
-              padding: '14px 18px',
-              fontFamily: '"Archivo Black", sans-serif',
-              fontSize: 13,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: '#ffffff',
-              cursor: 'pointer',
-              marginBottom: 10,
+              flexShrink: 0,
             }}
           >
-            <span>{c.cta}</span>
-            <span style={{ fontSize: 18 }}>→</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#ffffff' }}>
+              {c.icon}
+              <span
+                style={{
+                  fontFamily: '"Archivo Black", sans-serif',
+                  fontSize: 11,
+                  letterSpacing: '0.22em',
+                  textTransform: 'uppercase',
+                  color: '#ffffff',
+                }}
+              >
+                {c.platform}
+              </span>
+            </div>
 
-          {/* Skip */}
-          <button
-            onClick={handleDismiss}
+            <button
+              onClick={handleDismiss}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                border: '2px solid rgba(255,255,255,0.4)',
+                color: '#ffffff',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 18,
+                cursor: 'pointer',
+                lineHeight: 1,
+                flexShrink: 0,
+                /* larger tap target on touch */
+                touchAction: 'manipulation',
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* ── Yellow accent bar ── */}
+          <div
             style={{
-              display: 'block',
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              padding: '8px',
-              fontFamily: '"Archivo Black", sans-serif',
-              fontSize: 10,
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-              color: 'var(--muted, #6b6b73)',
-              cursor: 'pointer',
-              textAlign: 'center',
+              height: 5,
+              background: '#ffd51f',
+              borderBottom: '3px solid var(--ink, #0c0c10)',
+              flexShrink: 0,
             }}
-          >
-            MAYBE LATER
-          </button>
+          />
+
+          {/* ── Body ── */}
+          <div style={{ padding: '18px 18px 16px' }}>
+            {/* Heading */}
+            <div
+              className="snm-heading"
+              style={{
+                fontFamily: '"Archivo Black", sans-serif',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.05,
+                color: 'var(--ink, #0c0c10)',
+                textTransform: 'uppercase',
+                marginBottom: 10,
+                whiteSpace: 'pre-line',
+              }}
+            >
+              {c.heading}
+            </div>
+
+            {/* Prize badge */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                background: '#ffd51f',
+                border: '3px solid var(--ink, #0c0c10)',
+                boxShadow: '3px 3px 0 var(--ink, #0c0c10)',
+                padding: '4px 10px',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--ink, #0c0c10)',
+                marginBottom: 12,
+              }}
+            >
+              🏆 USDT PRIZE POOLS
+            </div>
+
+            {/* Body copy */}
+            <p
+              className="snm-body"
+              style={{
+                fontFamily: '"Space Grotesk", sans-serif',
+                lineHeight: 1.6,
+                color: 'var(--ink-soft, #2a2a33)',
+                margin: '0 0 16px',
+              }}
+            >
+              {c.body}
+            </p>
+
+            {/* Primary CTA */}
+            <button
+              className="snm-cta"
+              onClick={handleFollow}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                boxSizing: 'border-box',
+                background: c.platformColor,
+                border: '4px solid var(--ink, #0c0c10)',
+                boxShadow: '4px 4px 0 var(--ink, #0c0c10)',
+                fontFamily: '"Archivo Black", sans-serif',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: '#ffffff',
+                cursor: 'pointer',
+                marginBottom: 8,
+                touchAction: 'manipulation',
+              }}
+            >
+              <span>{c.cta}</span>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
+            </button>
+
+            {/* Skip */}
+            <button
+              onClick={handleDismiss}
+              style={{
+                display: 'block',
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                /* generous tap target */
+                padding: '12px 8px',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 10,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--muted, #6b6b73)',
+                cursor: 'pointer',
+                textAlign: 'center',
+                touchAction: 'manipulation',
+              }}
+            >
+              MAYBE LATER
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
