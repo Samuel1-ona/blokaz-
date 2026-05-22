@@ -3,11 +3,19 @@ import { BrutalIcon } from './BrutalIcon'
 import { useAccount } from 'wagmi'
 import { useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
-import { useLeaderboard, useTournamentCount, USDC_DECIMALS, useUsername } from '../hooks/useBlokzGame'
+import {
+  useLeaderboard,
+  useTournamentCount,
+  USDC_DECIMALS,
+  useUsername,
+} from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
-import UsernameSetupModal, { hasDismissedUsernamePrompt } from './UsernameSetupModal'
+import UsernameSetupModal, {
+  hasDismissedUsernamePrompt,
+} from './UsernameSetupModal'
+import { NewsNudge } from './GameNotification'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
@@ -15,7 +23,10 @@ const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 function useCountUp(target: number, duration = 900, delay = 0): number {
   const [value, setValue] = useState(0)
   useEffect(() => {
-    if (!target) { setValue(0); return }
+    if (!target) {
+      setValue(0)
+      return
+    }
     const t = setTimeout(() => {
       const start = Date.now()
       const tick = () => {
@@ -32,13 +43,16 @@ function useCountUp(target: number, duration = 900, delay = 0): number {
 }
 
 // ─── Animated entrance wrapper ───────────────────────────────────────────────
-const FadeUp: React.FC<{ delay?: number; children: React.ReactNode; className?: string }> = ({
-  delay = 0,
-  children,
-  className = '',
-}) => {
+const FadeUp: React.FC<{
+  delay?: number
+  children: React.ReactNode
+  className?: string
+}> = ({ delay = 0, children, className = '' }) => {
   const [visible, setVisible] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setVisible(true), delay); return () => clearTimeout(t) }, [delay])
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), delay)
+    return () => clearTimeout(t)
+  }, [delay])
   return (
     <div
       className={className}
@@ -53,18 +67,59 @@ const FadeUp: React.FC<{ delay?: number; children: React.ReactNode; className?: 
   )
 }
 
-// ─── Marquee ticker ──────────────────────────────────────────────────────────
-const TICKER_ITEMS = [
-  '⬛ STACK',
-  '▶ SMASH',
-  '◆ STAKE',
-  '⬛ PLAY ON-CHAIN',
-  '◆ WIN USDT',
-  '▶ FREE TO PLAY',
+// ─── News & updates ──────────────────────────────────────────────────────────
+export interface NewsItem {
+  id: string
+  tag: 'UPDATE' | 'CAMPAIGN' | 'TOURNAMENT' | 'COMMUNITY' | 'NEW'
+  date: string // e.g. "22 MAY 2026"
+  headline: string
+  body: string
+  link?: string
+}
+
+// ✏️  Edit this array to publish new news items — newest first
+export const NEWS_ITEMS: NewsItem[] = [
+  {
+    id: 'launch-01',
+    tag: 'NEW',
+    date: '22 MAY 2026',
+    headline: 'Blokaz is live on MiniPay!',
+    body: 'The first on-chain block-stacking game is now playable inside MiniPay. Stack, smash, and compete for USDT prizes every month.',
+    link: 'https://minipay.to',
+  },
+  {
+    id: 'tournament-01',
+    tag: 'TOURNAMENT',
+    date: '22 MAY 2026',
+    headline: 'Weekly prize tournaments coming soon',
+    body: 'Monthly and weekly tournaments with real USDT prize pools are on the way. Follow us on Twitter to hear about this updates first.',
+    link: 'https://x.com/playblokaz',
+  },
+  {
+    id: 'community-01',
+    tag: 'COMMUNITY',
+    date: '22 MAY 2026',
+    headline: 'Join the Blokaz Telegram community',
+    body: "Get early access drops, tournament announcements, and alpha straight from the team. The community is growing fast — don't miss out.",
+    link: 'https://t.me/tweetlegg',
+  },
 ]
 
+const TAG_COLORS: Record<NewsItem['tag'], { bg: string; color: string }> = {
+  NEW: { bg: '#ffd51f', color: '#0c0c10' },
+  UPDATE: { bg: '#b7ff3b', color: '#0c0c10' },
+  TOURNAMENT: { bg: '#ff7a1a', color: '#ffffff' },
+  CAMPAIGN: { bg: '#8a3dff', color: '#ffffff' },
+  COMMUNITY: { bg: '#29e6e6', color: '#0c0c10' },
+}
+
+// ─── Marquee ticker — pulls headlines from NEWS_ITEMS ────────────────────────
 const Ticker: React.FC = () => {
-  const items = [...TICKER_ITEMS, ...TICKER_ITEMS] // double for seamless loop
+  const rawItems = NEWS_ITEMS.map((n, i) => ({
+    text: `${n.tag} — ${n.headline}`,
+    highlight: i === 0,
+  }))
+  const items = [...rawItems, ...rawItems] // double for seamless loop
   return (
     <div
       className="overflow-hidden border-y-[3px] border-ink"
@@ -76,7 +131,7 @@ const Ticker: React.FC = () => {
           alignItems: 'center',
           height: '100%',
           width: 'max-content',
-          animation: 'lobbyTicker 18s linear infinite',
+          animation: 'lobbyTicker 28s linear infinite',
           willChange: 'transform',
         }}
       >
@@ -88,15 +143,171 @@ const Ticker: React.FC = () => {
               fontSize: 9,
               letterSpacing: '0.22em',
               textTransform: 'uppercase',
-              color: i % 3 === 0 ? '#FFE600' : 'rgba(255,255,255,0.65)',
-              paddingLeft: 28,
+              color: item.highlight ? '#FFE600' : 'rgba(255,255,255,0.65)',
+              paddingLeft: 32,
               paddingRight: 4,
               whiteSpace: 'nowrap',
             }}
           >
-            {item}
+            {i % rawItems.length === 0 && (
+              <span style={{ color: '#ffd51f', marginRight: 10 }}>◆</span>
+            )}
+            {item.text}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── News card ───────────────────────────────────────────────────────────────
+const NewsCard: React.FC = () => {
+  const [activeIdx, setActiveIdx] = useState(0)
+  const item = NEWS_ITEMS[activeIdx]
+  const tc = TAG_COLORS[item.tag]
+
+  return (
+    <div
+      className="border-[3px] border-ink"
+      style={{
+        background: 'var(--paper-2)',
+        boxShadow: '5px 5px 0 var(--shadow)',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between border-b-[3px] border-ink px-4 py-3"
+        style={{ background: 'var(--paper)' }}
+      >
+        <div
+          className="font-display text-[10px] tracking-[0.18em]"
+          style={{ color: 'var(--label)' }}
+        >
+          NEWS &amp; UPDATES
+        </div>
+        {/* Dot nav */}
+        <div className="flex items-center gap-[5px]">
+          {NEWS_ITEMS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveIdx(i)}
+              style={{
+                width: i === activeIdx ? 18 : 8,
+                height: 8,
+                border: '2px solid var(--ink)',
+                background:
+                  i === activeIdx ? 'var(--accent-yellow)' : 'var(--rule)',
+                cursor: 'pointer',
+                padding: 0,
+                transition: 'width 200ms ease, background 200ms ease',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        {/* Tag + date row */}
+        <div className="mb-3 flex items-center gap-2">
+          <span
+            className="font-display text-[9px] tracking-[0.16em]"
+            style={{
+              background: tc.bg,
+              color: tc.color,
+              border: '2px solid var(--ink)',
+              padding: '2px 8px',
+            }}
+          >
+            {item.tag}
+          </span>
+          <span
+            className="font-display text-[9px] tracking-[0.12em]"
+            style={{ color: 'var(--muted)' }}
+          >
+            {item.date}
+          </span>
+        </div>
+
+        {/* Headline */}
+        <div
+          className="font-display text-[15px] leading-tight tracking-[-0.01em]"
+          style={{
+            color: 'var(--ink)',
+            marginBottom: 8,
+            textTransform: 'uppercase',
+          }}
+        >
+          {item.headline}
+        </div>
+
+        {/* Body */}
+        <p
+          style={{
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 12,
+            lineHeight: 1.6,
+            color: 'var(--ink-soft)',
+            margin: '0 0 14px',
+          }}
+        >
+          {item.body}
+        </p>
+
+        {/* Link CTA */}
+        {item.link && (
+          <a
+            href={item.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between border-[3px] border-ink px-3 py-2 font-display text-[10px] tracking-[0.12em]"
+            style={{
+              background: tc.bg,
+              color: tc.color,
+              textDecoration: 'none',
+              boxShadow: '3px 3px 0 var(--ink)',
+              textTransform: 'uppercase',
+            }}
+          >
+            <span>READ MORE</span>
+            <span>→</span>
+          </a>
+        )}
+
+        {/* Prev / next */}
+        {NEWS_ITEMS.length > 1 && (
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() =>
+                setActiveIdx(
+                  (i) => (i - 1 + NEWS_ITEMS.length) % NEWS_ITEMS.length
+                )
+              }
+              disabled={activeIdx === 0}
+              className="flex-1 border-[2px] border-ink py-1 font-display text-[9px] tracking-[0.12em] disabled:opacity-30"
+              style={{
+                background: 'var(--paper)',
+                color: 'var(--ink)',
+                cursor: activeIdx === 0 ? 'default' : 'pointer',
+              }}
+            >
+              ← PREV
+            </button>
+            <button
+              onClick={() => setActiveIdx((i) => (i + 1) % NEWS_ITEMS.length)}
+              disabled={activeIdx === NEWS_ITEMS.length - 1}
+              className="flex-1 border-[2px] border-ink py-1 font-display text-[9px] tracking-[0.12em] disabled:opacity-30"
+              style={{
+                background: 'var(--paper)',
+                color: 'var(--ink)',
+                cursor:
+                  activeIdx === NEWS_ITEMS.length - 1 ? 'default' : 'pointer',
+              }}
+            >
+              NEXT →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -105,30 +316,104 @@ const Ticker: React.FC = () => {
 // ─── Floating Tetris Blocks ──────────────────────────────────────────────────
 const TetrisBlocks: React.FC = () => (
   <div style={{ animation: 'lobbyFloat 3.4s ease-in-out infinite' }}>
-    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="9" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="9" y="9" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="18" y="9" width="9" height="9" fill="var(--piece-purple)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="18" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="27" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="18" y="27" width="9" height="9" fill="var(--piece-yellow)" stroke="var(--ink)" strokeWidth="1.5"/>
-      <rect x="27" y="27" width="9" height="9" fill="var(--piece-lime)" stroke="var(--ink)" strokeWidth="1.5"/>
+    <svg
+      width="36"
+      height="36"
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect
+        x="0"
+        y="18"
+        width="9"
+        height="9"
+        fill="var(--piece-red)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="9"
+        y="18"
+        width="9"
+        height="9"
+        fill="var(--piece-red)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="9"
+        y="9"
+        width="9"
+        height="9"
+        fill="var(--piece-red)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="18"
+        y="9"
+        width="9"
+        height="9"
+        fill="var(--piece-purple)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="18"
+        y="18"
+        width="9"
+        height="9"
+        fill="var(--piece-blue)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="27"
+        y="18"
+        width="9"
+        height="9"
+        fill="var(--piece-blue)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="18"
+        y="27"
+        width="9"
+        height="9"
+        fill="var(--piece-yellow)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="27"
+        y="27"
+        width="9"
+        height="9"
+        fill="var(--piece-lime)"
+        stroke="var(--ink)"
+        strokeWidth="1.5"
+      />
     </svg>
   </div>
 )
 
 // ─── Animated streak bars ────────────────────────────────────────────────────
-const StreakBars: React.FC<{ streak: number; count?: number; accent?: string }> = ({
-  streak,
-  count = 7,
-  accent,
-}) => {
+const StreakBars: React.FC<{
+  streak: number
+  count?: number
+  accent?: string
+}> = ({ streak, count = 7, accent }) => {
   const [filled, setFilled] = useState(0)
   useEffect(() => {
     let i = 0
     const fill = () => {
-      if (i <= streak) { setFilled(i); i++; setTimeout(fill, 80) }
+      if (i <= streak) {
+        setFilled(i)
+        i++
+        setTimeout(fill, 80)
+      }
     }
     const t = setTimeout(fill, 400)
     return () => clearTimeout(t)
@@ -140,7 +425,8 @@ const StreakBars: React.FC<{ streak: number; count?: number; accent?: string }> 
           key={i}
           className="h-[14px] flex-1 border-[2px] border-ink"
           style={{
-            background: i < filled ? (accent ?? 'var(--accent)') : 'var(--rule)',
+            background:
+              i < filled ? (accent ?? 'var(--accent)') : 'var(--rule)',
             transition: 'background 120ms ease',
           }}
         />
@@ -154,11 +440,11 @@ interface LobbyScreenProps {
   onPlayTournaments: () => void
 }
 
-const RailShell: React.FC<{ title: string; children: React.ReactNode; accent?: boolean }> = ({
-  title,
-  children,
-  accent = false,
-}) => (
+const RailShell: React.FC<{
+  title: string
+  children: React.ReactNode
+  accent?: boolean
+}> = ({ title, children, accent = false }) => (
   <div
     className="border-[3px] border-ink"
     style={{
@@ -179,12 +465,13 @@ const RailShell: React.FC<{ title: string; children: React.ReactNode; accent?: b
   </div>
 )
 
-const MiniMetric: React.FC<{ label: string; value: string; background: string }> = ({
-  label,
-  value,
-  background,
-}) => {
-  const isColoredSurface = background !== 'var(--paper)' && background !== 'var(--paper-2)'
+const MiniMetric: React.FC<{
+  label: string
+  value: string
+  background: string
+}> = ({ label, value, background }) => {
+  const isColoredSurface =
+    background !== 'var(--paper)' && background !== 'var(--paper-2)'
   const textColor = isColoredSurface ? 'var(--ink-fixed)' : 'var(--ink)'
   const labelColor = isColoredSurface ? 'var(--ink-fixed)' : 'var(--ink-soft)'
 
@@ -214,11 +501,19 @@ const MiniMetric: React.FC<{ label: string; value: string; background: string }>
 
 const LobbyPlayerName: React.FC<{ address: string }> = ({ address }) => {
   const { username, isLoading } = useUsername(address as `0x${string}`)
-  if (isLoading) return <span className="inline-block h-3 w-20 animate-pulse rounded-sm bg-current opacity-20" />
-  return <span>{username ?? `${address.slice(0, 6)}…${address.slice(-4)}`}</span>
+  if (isLoading)
+    return (
+      <span className="inline-block h-3 w-20 animate-pulse rounded-sm bg-current opacity-20" />
+    )
+  return (
+    <span>{username ?? `${address.slice(0, 6)}…${address.slice(-4)}`}</span>
+  )
 }
 
-const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTournaments }) => {
+const LobbyScreen: React.FC<LobbyScreenProps> = ({
+  onPlayClassic,
+  onPlayTournaments,
+}) => {
   const { address } = useAccount()
   const { effectiveTheme } = useTheme()
   const isDarkTheme = effectiveTheme !== 'light'
@@ -264,42 +559,59 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
 
   const formattedPool = useMemo(() => {
     const raw = Number(formatUnits(totalPool, USDC_DECIMALS))
-    return raw ? raw.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'
+    return raw
+      ? raw.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : '0'
   }, [totalPool])
 
   const playerStats = useMemo(() => {
     if (!leaderboard || !address) return null
-    const entries = leaderboard as readonly { player: `0x${string}`; score: number; gameId: bigint }[]
+    const entries = leaderboard as readonly {
+      player: `0x${string}`
+      score: number
+      gameId: bigint
+    }[]
     const sorted = [...entries].sort((a, b) => b.score - a.score)
-    const idx = sorted.findIndex(e => e.player.toLowerCase() === address.toLowerCase())
+    const idx = sorted.findIndex(
+      (e) => e.player.toLowerCase() === address.toLowerCase()
+    )
     if (idx === -1) return null
     return { rank: idx + 1, bestScore: sorted[idx].score }
   }, [leaderboard, address])
 
   const sortedLeaderboard = useMemo(
-    () => (leaderboard ? [...leaderboard].sort((a, b) => b.score - a.score) : []),
+    () =>
+      leaderboard ? [...leaderboard].sort((a, b) => b.score - a.score) : [],
     [leaderboard]
   )
 
-  const season = currentEpoch !== undefined ? Math.floor(Number(currentEpoch) / 12) + 1 : null
-  const week = currentEpoch !== undefined ? (Number(currentEpoch) % 12) + 1 : null
+  const season =
+    currentEpoch !== undefined
+      ? Math.floor(Number(currentEpoch) / 12) + 1
+      : null
+  const week =
+    currentEpoch !== undefined ? (Number(currentEpoch) % 12) + 1 : null
 
   const [streak] = useState<number>(() => {
     try {
       const s = localStorage.getItem('blokaz_streak')
       return s ? parseInt(s, 10) : 0
-    } catch { return 0 }
+    } catch {
+      return 0
+    }
   })
 
   // ─── Username setup prompt ───────────────────────────────────────────────
-  const { username, isLoading: isLoadingUsername } = useUsername(address as `0x${string}` | undefined)
+  const { username, isLoading: isLoadingUsername } = useUsername(
+    address as `0x${string}` | undefined
+  )
   const [showUsernameModal, setShowUsernameModal] = useState(false)
 
   useEffect(() => {
     // Wait until username fetch resolves, then show prompt if needed
     if (!address || isLoadingUsername) return
-    if (username) return                          // already has one
-    if (hasDismissedUsernamePrompt()) return      // dismissed before
+    if (username) return // already has one
+    if (hasDismissedUsernamePrompt()) return // dismissed before
     // Small delay so the lobby finishes rendering first
     const t = setTimeout(() => setShowUsernameModal(true), 800)
     return () => clearTimeout(t)
@@ -307,8 +619,8 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
 
   // Count-up animated stats
   const animatedScore = useCountUp(playerStats?.bestScore ?? 0, 900, 300)
-  const animatedRank  = useCountUp(playerStats?.rank ?? 0, 700, 420)
-  const animatedLive  = useCountUp(activeTournaments, 600, 500)
+  const animatedRank = useCountUp(playerStats?.rank ?? 0, 700, 420)
+  const animatedLive = useCountUp(activeTournaments, 600, 500)
   const liveScore = playerStats?.bestScore ?? sortedLeaderboard[0]?.score ?? 0
   const animatedLiveScore = useCountUp(liveScore, 1000, 200)
 
@@ -320,7 +632,11 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
   const topThree = sortedLeaderboard.slice(0, 3)
   const currentRank = playerStats?.rank
   const localBest = (() => {
-    try { return Number(localStorage.getItem('blokaz:best_score') ?? 0) || 0 } catch { return 0 }
+    try {
+      return Number(localStorage.getItem('blokaz:best_score') ?? 0) || 0
+    } catch {
+      return 0
+    }
   })()
   const shareScore = Math.max(playerStats?.bestScore ?? 0, localBest)
 
@@ -328,11 +644,14 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
   const handleShareBestScore = () => {
     if (shareScore === 0) return
     const leaderboardRank = playerStats?.rank
-    const rankLine = leaderboardRank ? `\nrank #${leaderboardRank} on the weekly ladder` : ''
+    const rankLine = leaderboardRank
+      ? `\nrank #${leaderboardRank} on the weekly ladder`
+      : ''
     const text = `my best score on @playblokaz is ${shareScore.toLocaleString()} 🎮${rankLine}\n\ncan you beat it? blokaz.xyz\n\n${HASHTAGS}`
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
-      '_blank', 'noopener,noreferrer'
+      '_blank',
+      'noopener,noreferrer'
     )
   }
 
@@ -342,7 +661,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
       <FadeUp delay={60}>
         <div
           className="mt-1 border-[3px] border-ink p-4 lg:mt-0 lg:p-6"
-          style={{ background: heroBackground, boxShadow: '5px 5px 0 var(--shadow)' }}
+          style={{
+            background: heroBackground,
+            boxShadow: '5px 5px 0 var(--shadow)',
+          }}
         >
           <div className="mb-3 flex items-center justify-end">
             <TetrisBlocks />
@@ -350,7 +672,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
 
           <div
             className="font-display leading-[0.92]"
-            style={{ fontSize: 'clamp(44px, 7vw, 72px)', letterSpacing: '-0.025em' }}
+            style={{
+              fontSize: 'clamp(44px, 7vw, 72px)',
+              letterSpacing: '-0.025em',
+            }}
           >
             {(['STACK.', 'SMASH.'] as const).map((word, wi) => (
               <div
@@ -369,7 +694,8 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                 color: 'var(--danger)',
                 WebkitTextStroke: '2px var(--ink)',
                 paintOrder: 'stroke fill',
-                animation: 'lobbySlideWord 400ms cubic-bezier(0.22,1,0.36,1) both',
+                animation:
+                  'lobbySlideWord 400ms cubic-bezier(0.22,1,0.36,1) both',
                 animationDelay: '300ms',
               }}
             >
@@ -379,7 +705,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
         </div>
       </FadeUp>
 
-      {/* Ticker strip */}
+      {/* Ticker strip — news headlines */}
       <FadeUp delay={180}>
         <Ticker />
       </FadeUp>
@@ -394,10 +720,19 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
             style={{ background: 'var(--paper)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>BEST</span>
+            <span
+              className="mb-1 font-display text-[9px] tracking-[0.16em]"
+              style={{ color: 'var(--ink-fixed)' }}
+            >
+              BEST
+            </span>
             <span
               className="font-display"
-              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+              style={{
+                letterSpacing: '-0.03em',
+                fontSize: 'clamp(16px,5.5vw,28px)',
+                color: 'var(--ink-fixed)',
+              }}
             >
               {playerStats ? animatedScore.toLocaleString() : '—'}
             </span>
@@ -406,10 +741,19 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
             style={{ background: 'var(--accent-pink)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>RANK</span>
+            <span
+              className="mb-1 font-display text-[9px] tracking-[0.16em]"
+              style={{ color: 'var(--ink-fixed)' }}
+            >
+              RANK
+            </span>
             <span
               className="font-display"
-              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+              style={{
+                letterSpacing: '-0.03em',
+                fontSize: 'clamp(16px,5.5vw,28px)',
+                color: 'var(--ink-fixed)',
+              }}
             >
               {playerStats ? `#${animatedRank}` : '—'}
             </span>
@@ -418,10 +762,19 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center py-4"
             style={{ background: 'var(--accent-lime)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>WON</span>
+            <span
+              className="mb-1 font-display text-[9px] tracking-[0.16em]"
+              style={{ color: 'var(--ink-fixed)' }}
+            >
+              WON
+            </span>
             <span
               className="font-display"
-              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+              style={{
+                letterSpacing: '-0.03em',
+                fontSize: 'clamp(16px,5.5vw,28px)',
+                color: 'var(--ink-fixed)',
+              }}
             >
               —
             </span>
@@ -434,7 +787,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
         <button
           onClick={onPlayClassic}
           className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
-          style={{ background: 'var(--danger)', boxShadow: '5px 5px 0 var(--shadow)' }}
+          style={{
+            background: 'var(--danger)',
+            boxShadow: '5px 5px 0 var(--shadow)',
+          }}
         >
           <div
             className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
@@ -442,7 +798,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           >
             <span
               className="font-display text-2xl"
-              style={{ color: 'var(--accent-yellow)', animation: 'lobbyPulsePlay 2.4s ease-in-out infinite' }}
+              style={{
+                color: 'var(--accent-yellow)',
+                animation: 'lobbyPulsePlay 2.4s ease-in-out infinite',
+              }}
             >
               ▶
             </span>
@@ -451,7 +810,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
               PLAY CLASSIC <span className="text-2xl leading-none">→</span>
             </div>
-            <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
+            <div
+              className="mt-1 font-display text-[10px] tracking-[0.1em]"
+              style={{ color: '#FFFFFF' }}
+            >
               Weekly leaderboard · Free
             </div>
           </div>
@@ -467,7 +829,8 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
               style={{
                 background: 'var(--accent-lime)',
                 color: 'var(--ink-fixed)',
-                animation: 'lobbyBadgePop 0.6s cubic-bezier(0.34,1.56,0.64,1) both',
+                animation:
+                  'lobbyBadgePop 0.6s cubic-bezier(0.34,1.56,0.64,1) both',
                 animationDelay: '600ms',
               }}
             >
@@ -477,22 +840,44 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           <button
             onClick={onPlayTournaments}
             className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
-            style={{ background: 'var(--piece-blue)', boxShadow: '5px 5px 0 var(--shadow)' }}
+            style={{
+              background: 'var(--piece-blue)',
+              boxShadow: '5px 5px 0 var(--shadow)',
+            }}
           >
             <div
               className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
               style={{ background: 'var(--ink-fixed)' }}
             >
-              <BrutalIcon name="trophy" size={22} strokeWidth={2.5} className="text-white" />
+              <BrutalIcon
+                name="trophy"
+                size={22}
+                strokeWidth={2.5}
+                className="text-white"
+              />
             </div>
             <div className="flex-1 px-4 py-4">
               <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
                 TOURNAMENTS <span className="text-2xl leading-none">→</span>
               </div>
-              <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
-                {activeTournaments > 0
-                  ? <><span style={{ animation: 'loaderPulse 1.4s ease-in-out infinite' }}>●</span> {animatedLive} open · $1–$10 entry</>
-                  : 'View all brackets'}
+              <div
+                className="mt-1 font-display text-[10px] tracking-[0.1em]"
+                style={{ color: '#FFFFFF' }}
+              >
+                {activeTournaments > 0 ? (
+                  <>
+                    <span
+                      style={{
+                        animation: 'loaderPulse 1.4s ease-in-out infinite',
+                      }}
+                    >
+                      ●
+                    </span>{' '}
+                    {animatedLive} open · $1–$10 entry
+                  </>
+                ) : (
+                  'View all brackets'
+                )}
               </div>
             </div>
           </button>
@@ -503,7 +888,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
       <FadeUp delay={500}>
         <div
           className="flex flex-col gap-2 border-[3px] border-ink px-4 py-3"
-          style={{ background: 'var(--paper-2)', boxShadow: '5px 5px 0 var(--shadow)' }}
+          style={{
+            background: 'var(--paper-2)',
+            boxShadow: '5px 5px 0 var(--shadow)',
+          }}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -512,14 +900,29 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                 size={16}
                 strokeWidth={2.5}
                 className="text-ink"
-                style={{ animation: streak > 0 ? 'lobbyFlame 1.8s ease-in-out infinite' : undefined } as any}
+                style={
+                  {
+                    animation:
+                      streak > 0
+                        ? 'lobbyFlame 1.8s ease-in-out infinite'
+                        : undefined,
+                  } as any
+                }
               />
               <div>
-                <div className="font-display text-[9px] tracking-[0.16em]" style={{ color: streakLabelColor }}>
+                <div
+                  className="font-display text-[9px] tracking-[0.16em]"
+                  style={{ color: streakLabelColor }}
+                >
                   DAILY STREAK
                 </div>
-                <div className="font-display text-[11px] tracking-[0.04em]" style={{ color: 'var(--ink)' }}>
-                  {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS` : 'START YOUR STREAK'}
+                <div
+                  className="font-display text-[11px] tracking-[0.04em]"
+                  style={{ color: 'var(--ink)' }}
+                >
+                  {streak > 0
+                    ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS`
+                    : 'START YOUR STREAK'}
                 </div>
               </div>
             </div>
@@ -574,7 +977,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
         {/* ── Desktop three-column layout ── */}
         <div
           className="mx-auto hidden max-w-[1440px] items-start gap-8 lg:grid"
-          style={{ gridTemplateColumns: 'minmax(250px, 280px) minmax(0, 1fr) minmax(250px, 280px)' }}
+          style={{
+            gridTemplateColumns:
+              'minmax(250px, 280px) minmax(0, 1fr) minmax(250px, 280px)',
+          }}
         >
           {/* Left rail */}
           <div className="flex min-w-0 flex-col gap-5">
@@ -582,22 +988,40 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
               <RailShell title="LIVE SCORE" accent>
                 <div
                   className="font-display"
-                  style={{ color: 'var(--ink)', fontSize: 58, letterSpacing: '-0.04em', lineHeight: 0.94 }}
+                  style={{
+                    color: 'var(--ink)',
+                    fontSize: 58,
+                    letterSpacing: '-0.04em',
+                    lineHeight: 0.94,
+                  }}
                 >
                   {animatedLiveScore.toLocaleString()}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <div
                     className="border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
-                    style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                    style={{
+                      background: 'var(--accent-yellow)',
+                      color: 'var(--ink-fixed)',
+                    }}
                   >
                     {currentRank ? `RANK #${currentRank}` : 'JOIN THE LADDER'}
                   </div>
                   <div
                     className="flex items-center gap-1 border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
-                    style={{ background: 'var(--paper-2)', color: 'var(--ink)' }}
+                    style={{
+                      background: 'var(--paper-2)',
+                      color: 'var(--ink)',
+                    }}
                   >
-                    <span style={{ animation: 'loaderPulse 1.4s ease-in-out infinite', color: 'var(--accent-lime)' }}>●</span>
+                    <span
+                      style={{
+                        animation: 'loaderPulse 1.4s ease-in-out infinite',
+                        color: 'var(--accent-lime)',
+                      }}
+                    >
+                      ●
+                    </span>
                     {animatedLive} LIVE
                   </div>
                 </div>
@@ -606,12 +1030,16 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
 
             <FadeUp delay={160}>
               <RailShell title="NEXT CLEAR CHAIN">
-                <div className="relative overflow-hidden border-[3px] border-ink" style={{ height: 24 }}>
+                <div
+                  className="relative overflow-hidden border-[3px] border-ink"
+                  style={{ height: 24 }}
+                >
                   <div
                     className="absolute inset-y-0 left-0"
                     style={{
                       width: nextChainWidth,
-                      background: 'repeating-linear-gradient(135deg, var(--accent) 0 18px, var(--accent-2) 18px 36px)',
+                      background:
+                        'repeating-linear-gradient(135deg, var(--accent) 0 18px, var(--accent-2) 18px 36px)',
                       transition: 'width 800ms cubic-bezier(0.22,1,0.36,1)',
                     }}
                   />
@@ -620,7 +1048,9 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                   className="mt-3 flex items-center justify-between font-display text-[10px] tracking-[0.14em]"
                   style={{ color: 'var(--ink-soft)' }}
                 >
-                  <span>{streak > 0 ? `DAY ${streak} READY` : 'OPENING LINE'}</span>
+                  <span>
+                    {streak > 0 ? `DAY ${streak} READY` : 'OPENING LINE'}
+                  </span>
                   <span>+{Math.max(80, streak * 40)} BONUS</span>
                 </div>
               </RailShell>
@@ -629,10 +1059,18 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             <FadeUp delay={240}>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <MiniMetric label="POOL" value={`$${formattedPool}`}      background="var(--accent-lime)" />
+                  <MiniMetric
+                    label="POOL"
+                    value={`$${formattedPool}`}
+                    background="var(--accent-lime)"
+                  />
                 </div>
                 <div className="flex-1">
-                  <MiniMetric label="OPEN" value={String(activeTournaments)} background="var(--accent-cyan)" />
+                  <MiniMetric
+                    label="OPEN"
+                    value={String(activeTournaments)}
+                    background="var(--accent-cyan)"
+                  />
                 </div>
               </div>
             </FadeUp>
@@ -640,12 +1078,25 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             <FadeUp delay={320}>
               <RailShell title="DAILY STREAK">
                 <div className="flex items-center gap-3">
-                  <BrutalIcon name="flame" size={18} strokeWidth={2.5} className="text-ink" />
+                  <BrutalIcon
+                    name="flame"
+                    size={18}
+                    strokeWidth={2.5}
+                    className="text-ink"
+                  />
                   <div>
-                    <div className="font-display text-[11px] tracking-[0.12em]" style={{ color: streakLabelColor }}>
-                      {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X BONUS' : `${streak}X BONUS`}` : 'START YOUR STREAK'}
+                    <div
+                      className="font-display text-[11px] tracking-[0.12em]"
+                      style={{ color: streakLabelColor }}
+                    >
+                      {streak > 0
+                        ? `DAY ${streak} · ${streak >= 7 ? '2X BONUS' : `${streak}X BONUS`}`
+                        : 'START YOUR STREAK'}
                     </div>
-                    <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: 'var(--ink-soft)' }}>
+                    <div
+                      className="mt-1 font-display text-[10px] tracking-[0.1em]"
+                      style={{ color: 'var(--ink-soft)' }}
+                    >
                       Fill the week bar to lock your multiplier.
                     </div>
                   </div>
@@ -667,23 +1118,37 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                 <div className="space-y-2">
                   {topThree.length > 0 ? (
                     topThree.map((entry, index) => {
-                      const isCurrentUser = address?.toLowerCase() === entry.player.toLowerCase()
+                      const isCurrentUser =
+                        address?.toLowerCase() === entry.player.toLowerCase()
                       return (
                         <div
                           key={entry.player}
                           className="flex items-center gap-3 border-[3px] border-ink px-3 py-3"
                           style={{
-                            background: index === 0 ? 'var(--accent-yellow)' : isCurrentUser ? 'var(--accent-cyan)' : 'var(--paper-2)',
-                            color: index === 0 || isCurrentUser ? 'var(--ink-fixed)' : 'var(--ink)',
+                            background:
+                              index === 0
+                                ? 'var(--accent-yellow)'
+                                : isCurrentUser
+                                  ? 'var(--accent-cyan)'
+                                  : 'var(--paper-2)',
+                            color:
+                              index === 0 || isCurrentUser
+                                ? 'var(--ink-fixed)'
+                                : 'var(--ink)',
                             animation: `lobbySlideWord 300ms cubic-bezier(0.22,1,0.36,1) both`,
                             animationDelay: `${200 + index * 80}ms`,
                           }}
                         >
-                          <span className="w-6 font-display text-[16px]">#{index + 1}</span>
+                          <span className="w-6 font-display text-[16px]">
+                            #{index + 1}
+                          </span>
                           <span className="min-w-0 flex-1 truncate font-display text-[11px] tracking-[0.08em]">
                             <LobbyPlayerName address={entry.player} />
                           </span>
-                          <span className="font-display text-[12px]" style={{ letterSpacing: '-0.02em' }}>
+                          <span
+                            className="font-display text-[12px]"
+                            style={{ letterSpacing: '-0.02em' }}
+                          >
                             {entry.score.toLocaleString()}
                           </span>
                         </div>
@@ -692,7 +1157,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                   ) : (
                     <div
                       className="border-[3px] border-ink px-3 py-4 font-display text-[10px] tracking-[0.12em]"
-                      style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+                      style={{
+                        background: 'var(--paper-2)',
+                        color: 'var(--ink-soft)',
+                      }}
                     >
                       Ladder is warming up.
                     </div>
@@ -705,9 +1173,21 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
               <RailShell title="DANGER WATCH">
                 <div className="space-y-2">
                   {[
-                    { label: '3×3 SQUARE', state: 'HIGH', bg: 'var(--piece-red)' },
-                    { label: '5-LONG LINE', state: 'MED',  bg: 'var(--piece-orange)' },
-                    { label: 'Z-ZIGZAG',   state: 'LOW',  bg: 'var(--piece-lime)' },
+                    {
+                      label: '3×3 SQUARE',
+                      state: 'HIGH',
+                      bg: 'var(--piece-red)',
+                    },
+                    {
+                      label: '5-LONG LINE',
+                      state: 'MED',
+                      bg: 'var(--piece-orange)',
+                    },
+                    {
+                      label: 'Z-ZIGZAG',
+                      state: 'LOW',
+                      bg: 'var(--piece-lime)',
+                    },
                   ].map((item, i) => (
                     <div
                       key={item.label}
@@ -718,12 +1198,18 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                         animationDelay: `${300 + i * 70}ms`,
                       }}
                     >
-                      <span className="font-display text-[11px] tracking-[0.08em]" style={{ color: 'var(--ink)' }}>
+                      <span
+                        className="font-display text-[11px] tracking-[0.08em]"
+                        style={{ color: 'var(--ink)' }}
+                      >
                         {item.label}
                       </span>
                       <span
                         className="border-[2px] border-ink px-2 py-0.5 font-display text-[9px] tracking-[0.1em]"
-                        style={{ background: item.bg, color: 'var(--ink-fixed)' }}
+                        style={{
+                          background: item.bg,
+                          color: 'var(--ink-fixed)',
+                        }}
                       >
                         {item.state}
                       </span>
@@ -754,12 +1240,16 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
         </div>
 
         {/* ── Mobile stack ── */}
-        <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">{heroStack}</div>
+        <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">
+          {heroStack}
+        </div>
       </div>
 
       {showUsernameModal && (
         <UsernameSetupModal onDismiss={() => setShowUsernameModal(false)} />
       )}
+
+      <NewsNudge newsItems={NEWS_ITEMS} />
     </>
   )
 }
