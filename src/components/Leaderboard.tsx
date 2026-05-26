@@ -205,11 +205,16 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
               >
                 ‹
               </button>
-              <div className="inline-flex items-center gap-2 border-2 border-paper bg-accent-yellow px-3 py-1 font-display text-[11px] tracking-[0.16em] text-ink">
-                {viewEpoch !== undefined ? `WEEK #${viewEpoch.toString()}` : 'LOADING...'}
-                {!isCurrentEpoch && (
-                  <span className="border border-ink bg-ink px-1 text-[9px] text-paper">PAST</span>
-                )}
+              <div className="flex flex-col gap-1">
+                <div className="inline-flex items-center gap-2 border-2 border-paper bg-accent-yellow px-3 py-1 font-display text-[11px] tracking-[0.16em] text-ink">
+                  {viewEpoch !== undefined ? `WEEK #${viewEpoch.toString()}` : 'LOADING...'}
+                  {!isCurrentEpoch && (
+                    <span className="border border-ink bg-ink px-1 text-[9px] text-paper">PAST</span>
+                  )}
+                </div>
+                <div className="font-display text-[9px] tracking-[0.12em] text-paper opacity-60">
+                  RESETS EVERY THURSDAY
+                </div>
               </div>
               <button
                 onClick={() => setViewEpoch(e => e !== undefined ? e + 1n : e)}
@@ -352,6 +357,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
             className="font-display text-[9px] leading-relaxed tracking-[0.14em] opacity-60"
             style={{ color: 'var(--paper)' }}
           >
+            LEADERBOARD RESETS EVERY THURSDAY.
+            <br />
             GLOBAL IDENTITIES ARE PERMANENT.
             <br />
             TOP PLAYERS SHARE NATIVE REWARD POOL.

@@ -16,6 +16,7 @@ import UsernameSetupModal, {
   hasDismissedUsernamePrompt,
 } from './UsernameSetupModal'
 import { NewsNudge } from './GameNotification'
+import CampaignReminderModal from './CampaignReminderModal'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
@@ -79,6 +80,14 @@ export interface NewsItem {
 
 // ✏️  Edit this array to publish new news items — newest first
 export const NEWS_ITEMS: NewsItem[] = [
+  {
+    id: 'campaign-01',
+    tag: 'CAMPAIGN',
+    date: '26 MAY 2026',
+    headline: 'Monthly social campaign starts when the leaderboard resets on Thursday — now is the time to win real prizes!',
+    body: 'The Blokaz monthly social campaign is kicking off with the Thursday leaderboard reset. Stack your score, climb the ranks, and claim real stablecoin prizes. The grind starts now.',
+    link: 'https://x.com/playblokaz',
+  },
   {
     id: 'launch-01',
     tag: 'NEW',
@@ -1245,6 +1254,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
       )}
 
       <NewsNudge newsItems={NEWS_ITEMS} />
+      <CampaignReminderModal />
     </>
   )
 }
