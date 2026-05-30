@@ -656,13 +656,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
         const newGameId = res.data as bigint
         if (newGameId && newGameId !== 0n) {
           setOnChainData(newGameId, currentSeed.seed, 'registered')
-          writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, {
+          // Preserve the in-progress snapshot so the player can resume after
+          // the WebView is recreated (MiniPay pause / background).
+          const existingRaw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          const newEntry: any = {
             address,
             seed: currentSeed.seed,
             hash: currentSeed.hash,
             gameId: newGameId.toString(),
             contractAddress: GAME_ADDRESS,
-          })
+          }
+          if (existingRaw) {
+            try {
+              const existing = JSON.parse(existingRaw)
+              if (existing.snapshot) newEntry.snapshot = existing.snapshot
+            } catch {}
+          }
+          writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, newEntry)
           clearInterval(timer)
         }
       }, 2000)
@@ -692,6 +702,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
       onBack?.()
     }
   }, [startGameError])
+
+  // Save snapshot when app is hidden (MiniPay pause / system multitask switch)
+  useEffect(() => {
+    const saveOnHide = () => {
+      if (!document.hidden) return
+      const session = useGameStore.getState().gameSession
+      if (!session?.moveHistory.length) return
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (!raw) return
+      try {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: session.moveHistory }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', saveOnHide)
+    return () => document.removeEventListener('visibilitychange', saveOnHide)
+  }, [])
 
   // Canvas init
   useEffect(() => {
