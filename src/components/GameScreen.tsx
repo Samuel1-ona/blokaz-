@@ -41,12 +41,22 @@ import { IS_MINIPAY } from '../utils/miniPay'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
 import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
+import { LotteryModal } from './LotteryModal'
+import {
+  checkLotteryTrigger,
+  getRandomPrize,
+  markLotteryThreshold,
+  resetLotterySession,
+} from '../utils/lottery'
+import type { Prize } from '../utils/lottery'
 import { PowerUpBar } from './PowerUpBar'
 import { ShopModal } from './ShopModal'
 import { usePowerUpStore } from '../stores/powerUpStore'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+import { isShopLotteryEnabled } from '../utils/featureFlags'
 
 function replayMoveHistory(
   seed: bigint,
@@ -459,6 +469,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [showShop, setShowShop] = useState(false)
 
   const { address, isConnected } = useAccount()
+  const isWhitelisted = isShopLotteryEnabled(address)
 
   // ── No-gas detection ──────────────────────────────────────────────────────
   // Threshold: 0.005 CELO — enough for ~3-5 typical contract writes.
@@ -478,6 +489,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }, [hasNoGas])
 
   const showNoGasModal = hasNoGas && !noGasDismissed
+
+  // ─── Lottery ────────────────────────────────────────────────────────────
+  const [lotteryPrize, setLotteryPrize]       = useState<Prize | null>(null)
+  const [lotteryThreshold, setLotteryThreshold] = useState<number>(0)
+  const prevScoreRef = useRef<number>(0)
 
   // ─── Social nudge ───────────────────────────────────────────────────────
   const [showSocialNudge, setShowSocialNudge] = useState(false)
@@ -638,6 +654,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const freshTier = getScoreTier(0)
     currentTierRef.current = freshTier
     document.documentElement.setAttribute('data-tier', '0')
+    // Reset lottery so each new game gets fresh threshold triggers
+    resetLotterySession()
+    prevScoreRef.current = 0
+    setLotteryPrize(null)
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
     if (
@@ -954,6 +974,22 @@ const GameScreen: React.FC<GameScreenProps> = ({
             })
           }
         }
+
+        // ── Lottery threshold check (whitelisted addresses only) ────────
+        if (isWhitelisted) {
+          const currentScore = currentSession.score
+          const prevScore    = prevScoreRef.current
+          if (currentScore !== prevScore) {
+            const threshold = checkLotteryTrigger(currentScore, prevScore)
+            if (threshold !== null) {
+              markLotteryThreshold(threshold)
+              const prize = getRandomPrize()
+              setLotteryThreshold(threshold)
+              setLotteryPrize(prize)
+            }
+            prevScoreRef.current = currentScore
+          }
+        }
       }
       // Always push the current tier into renderers every frame so a reset
       // (currentTierRef snapped to PAPER in handleStartGame / isGameOver effect)
@@ -1135,16 +1171,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
           comboStreak={comboStreak}
           bestScore={bestScore}
           gameSession={gameSession}
+          isGameOver={isGameOver}
           onOpenLeaderboard={onOpenLeaderboard}
           onBack={onBack}
           canvasArea={canvasArea}
-          onOpenShop={() => setShowShop(true)}
+          onOpenShop={isWhitelisted ? () => setShowShop(true) : undefined}
           onRotatePiece={handleRotatePiece}
           activePieceIndex={trayHoverIndexRef.current}
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
-        <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
+        {isWhitelisted && lotteryPrize && !isGameOver && (
+          <LotteryModal
+            prize={lotteryPrize}
+            threshold={lotteryThreshold}
+            onContinue={() => setLotteryPrize(null)}
+          />
+        )}
+        {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
       </>
     )
   }
@@ -1161,7 +1205,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
       {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
-      <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
+      {isWhitelisted && lotteryPrize && !isGameOver && (
+        <LotteryModal
+          prize={lotteryPrize}
+          threshold={lotteryThreshold}
+          onContinue={() => setLotteryPrize(null)}
+        />
+      )}
+      {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
     </>
   )
 }
@@ -1639,6 +1690,7 @@ interface MobileLayoutProps {
   comboStreak: number
   bestScore?: number
   gameSession: any
+  isGameOver?: boolean
   onOpenLeaderboard?: () => void
   onBack?: () => void
   canvasArea: React.ReactNode
@@ -1889,6 +1941,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   comboStreak,
   bestScore,
   gameSession,
+  isGameOver = false,
   onOpenLeaderboard,
   onBack,
   canvasArea,
@@ -1945,14 +1998,16 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           </div>
 
           {/* ── Power-up bar ──────────────────────────────────────────── */}
-          <div className="shrink-0">
-            <PowerUpBar
-              onOpenShop={onOpenShop ?? (() => {})}
-              rotatePassEnabled={true}
-              onRotatePiece={onRotatePiece ?? (() => {})}
-              activePieceIndex={activePieceIndex ?? null}
-            />
-          </div>
+          {!isGameOver && (
+            <div className="shrink-0">
+              <PowerUpBar
+                onOpenShop={onOpenShop ?? (() => {})}
+                rotatePassEnabled={true}
+                onRotatePiece={onRotatePiece ?? (() => {})}
+                activePieceIndex={activePieceIndex ?? null}
+              />
+            </div>
+          )}
         </>
       )}
 

@@ -109,31 +109,28 @@ function PowerTile({
 }) {
   const cfg = PU_CONFIG[id]
   const depleted = charges === 0
-  const tileBg = depleted ? '#E7E0D2' : cfg.bg
-  const iconColor = depleted ? '#A8A095' : (cfg.fg === '#fff' ? '#fff' : INK)
+  // Active: invert — ink tile, piece-colour icon + piece-colour shadow
+  const tileBg    = isActive ? INK : (depleted ? '#E7E0D2' : cfg.bg)
+  const iconColor = isActive ? cfg.bg : (depleted ? '#A8A095' : (cfg.fg === '#fff' ? '#fff' : INK))
+  const shadow    = isActive ? PSH(3, 3, cfg.bg) : (depleted ? 'none' : PSH(3, 3))
+  const border    = isActive ? `4px solid ${cfg.bg}` : PBT
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-      {/* tile wrapper handles the active translate */}
-      <div style={{
-        position: 'relative',
-        transform: isActive ? 'translate(5px,5px)' : 'none',
-        transition: 'transform 80ms',
-      }}>
+      <div style={{ position: 'relative' }}>
         <button
           onClick={onClick}
           style={{
             width: 54, height: 54,
             background: tileBg,
-            border: PBT,
-            boxShadow: isActive ? PSH(0, 0) : PSH(3, 3),
-            outline: isActive ? `3px solid ${LIME}` : 'none',
-            outlineOffset: 3,
+            border,
+            boxShadow: shadow,
+            outline: 'none',
             display: 'grid', placeItems: 'center',
             cursor: 'pointer',
             padding: 0,
             touchAction: 'manipulation',
-            transition: 'box-shadow 80ms',
+            transition: 'background 100ms, border 100ms, box-shadow 100ms',
           }}
         >
           <div style={{ width: 28, height: 28, opacity: depleted ? 0.45 : 1 }}>
@@ -286,7 +283,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
 
   const handleTileClick = (id: PowerUpId) => {
     const charges = getCharges(id)
-    if (charges === 0) { onOpenShop(); return }
+    if (charges === 0) { onOpenShop?.(); return }
     switch (id) {
       case 'scoreBoost':
         if (!active.scoreBoost) activateScoreBoost()
@@ -353,16 +350,18 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
         )}
       </div>
 
-      {/* Divider + SHOP */}
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
-        <div style={{
-          width: 3,
-          background: 'var(--rule)',
-          margin: '2px 0 18px',
-          alignSelf: 'stretch',
-        }} />
-        <ShopTile onClick={onOpenShop} />
-      </div>
+      {/* Divider + SHOP — only shown when shop is available */}
+      {onOpenShop && (
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+          <div style={{
+            width: 3,
+            background: 'var(--rule)',
+            margin: '2px 0 18px',
+            alignSelf: 'stretch',
+          }} />
+          <ShopTile onClick={onOpenShop} />
+        </div>
+      )}
     </div>
   )
 }

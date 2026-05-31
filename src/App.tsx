@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useAccount } from 'wagmi'
 import Header from './components/Header'
 import AppFooter from './components/AppFooter'
 import SplashScreen from './components/SplashScreen'
+import { ShopModal } from './components/ShopModal'
+import { isShopLotteryEnabled } from './utils/featureFlags'
 
 // Lazy-loaded: these are large chunks not needed on initial paint
 const GameScreen = lazy(() => import('./components/GameScreen'))
@@ -33,6 +36,9 @@ const App: React.FC = () => {
     () => !document.getElementById('static-splash')
   )
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [showLobbyShop, setShowLobbyShop] = useState(false)
+  const { address } = useAccount()
+  const isWhitelisted = isShopLotteryEnabled(address)
   const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
   // Hide the header bar while actively playing — the game chrome has its own back/pause
@@ -123,6 +129,7 @@ const App: React.FC = () => {
             <LobbyScreen
               onPlayClassic={() => handleNavigate('classic')}
               onPlayTournaments={() => handleNavigate('tournaments')}
+              onOpenShop={isWhitelisted ? () => setShowLobbyShop(true) : undefined}
             />
           ) : activeView === 'classic' ? (
             <GameScreen
@@ -154,6 +161,11 @@ const App: React.FC = () => {
       {/* Footer — always visible; provides ToS, Privacy, Support links (MiniPay requirement) */}
       {activeView !== 'classic' && activeView !== 'tournament-play' && (
         <AppFooter />
+      )}
+
+      {/* Lobby shop modal — whitelisted addresses only */}
+      {isWhitelisted && (
+        <ShopModal isOpen={showLobbyShop} onClose={() => setShowLobbyShop(false)} />
       )}
     </div>
   )

@@ -448,6 +448,7 @@ const StreakBars: React.FC<{
 interface LobbyScreenProps {
   onPlayClassic: () => void
   onPlayTournaments: () => void
+  onOpenShop?: () => void
 }
 
 const RailShell: React.FC<{
@@ -523,6 +524,7 @@ const LobbyPlayerName: React.FC<{ address: string }> = ({ address }) => {
 const LobbyScreen: React.FC<LobbyScreenProps> = ({
   onPlayClassic,
   onPlayTournaments,
+  onOpenShop,
 }) => {
   const { address } = useAccount()
   const { effectiveTheme } = useTheme()
@@ -888,6 +890,57 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
           </button>
         </div>
       </FadeUp>
+
+      {/* Shop — whitelisted addresses only */}
+      {onOpenShop && (
+        <FadeUp delay={500}>
+          <div className="relative">
+            {/* NEW badge */}
+            <div
+              className="absolute right-[-8px] top-[-10px] z-10 border-[2px] border-ink px-2 py-[2px] font-display text-[9px] tracking-[0.12em]"
+              style={{
+                background: 'var(--danger)',
+                color: '#fff',
+                transform: 'rotate(6deg)',
+                boxShadow: '2px 2px 0 var(--shadow)',
+              }}
+            >
+              NEW
+            </div>
+            <button
+              onClick={onOpenShop}
+              className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
+              style={{
+                background: 'var(--accent-lime)',
+                boxShadow: '5px 5px 0 var(--shadow)',
+              }}
+            >
+              <div
+                className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
+                style={{ background: 'var(--ink-fixed)' }}
+              >
+                <span style={{ color: 'var(--accent-lime)' }}>
+                  <BrutalIcon name="shop" size={24} strokeWidth={2} />
+                </span>
+              </div>
+              <div className="flex-1 px-4 py-4">
+                <div
+                  className="flex items-center justify-between font-display text-xl tracking-[0.04em]"
+                  style={{ color: 'var(--ink-fixed)' }}
+                >
+                  SHOP <span className="text-2xl leading-none">→</span>
+                </div>
+                <div
+                  className="mt-1 font-display text-[10px] tracking-[0.1em]"
+                  style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}
+                >
+                  Power-ups · cosmetics · season pass
+                </div>
+              </div>
+            </button>
+          </div>
+        </FadeUp>
+      )}
 
       {/* Daily streak */}
       <FadeUp delay={500}>
