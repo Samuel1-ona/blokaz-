@@ -799,28 +799,35 @@ const GameScreen: React.FC<GameScreenProps> = ({
       Math.round(window.innerHeight * 0.58)
     )
 
-    const computeDims = (containerWidth: number, containerHeight = 0) => {
-      let gridSize = containerWidth > 0 ? containerWidth : vpFallback
-      if (containerHeight > 0) {
-        // totalCanvasH = gridSize + trayGap + trayH ≈ gridSize × 25/18
-        const maxByHeight = Math.floor((containerHeight * 18) / 25)
-        if (maxByHeight > 0 && maxByHeight < gridSize) gridSize = maxByHeight
+    // Simple: board fills full width, tray gets the remaining height.
+    // If remaining < minTray, shrink gridSize so tray is always usable.
+    const MIN_TRAY = 100  // px — minimum tray height
+    const computeDims = (containerW: number, containerH: number) => {
+      const w = containerW > 0 ? containerW : vpFallback
+      let gridSize = w
+      let trayHeight: number
+      if (containerH > 0) {
+        trayHeight = containerH - gridSize
+        if (trayHeight < MIN_TRAY) {
+          gridSize = containerH - MIN_TRAY
+          trayHeight = MIN_TRAY
+        }
+      } else {
+        trayHeight = Math.round(w * 0.25)
       }
       const cellSize = gridSize / 9
-      const trayGap = Math.round(cellSize * 0.5)
-      const trayHeight = Math.round(gridSize / 3)
-      const trayY = gridSize + trayGap
-      return { gridSize, cellSize, trayGap, trayHeight, trayY }
+      return { gridSize, cellSize, trayGap: 0, trayHeight, trayY: gridSize }
     }
 
-    const initialW = boardContainerRef.current?.clientWidth || 0
+    const initialW = boardContainerRef.current?.clientWidth  || 0
     const initialH = boardContainerRef.current?.clientHeight || 0
-    const init = computeDims(initialW, initialH)
+    const init     = computeDims(initialW, initialH)
+    const initTotalH = init.gridSize + init.trayHeight
 
-    canvas.width = init.gridSize
-    canvas.height = init.gridSize + init.trayGap + init.trayHeight
-    canvas.style.width = `${init.gridSize}px`
-    canvas.style.height = `${canvas.height}px`
+    canvas.width  = init.gridSize
+    canvas.height = initTotalH
+    canvas.style.width  = '100%'
+    canvas.style.height = `${initTotalH}px`
     canvas.style.background = 'transparent'
 
     setCanvasDims({
@@ -848,11 +855,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
         const w = entry.contentRect.width
         const h = entry.contentRect.height
         if (w <= 0) return
-        const d = computeDims(w, h)
-        const totalH = d.gridSize + d.trayGap + d.trayHeight
-        canvas.width = d.gridSize
+        const d      = computeDims(w, h)
+        const totalH = d.gridSize + d.trayHeight
+        canvas.width  = d.gridSize
         canvas.height = totalH
-        canvas.style.width = `${d.gridSize}px`
+        canvas.style.width  = '100%'
         canvas.style.height = `${totalH}px`
         gridRenderer.resize(d.gridSize)
         pieceRenderer.resize(d.trayY, d.cellSize, d.gridSize)
@@ -1582,27 +1589,22 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   return (
     <div
       ref={boardContainerRef}
-      className="flex flex-1 min-h-0 w-full select-none items-center justify-center"
+      className="w-full flex-1 min-h-0 select-none overflow-hidden px-1.5"
     >
-      <div className="relative inline-flex flex-col">
+      <div className="relative w-full">
         {canvasDims && (
           <>
             <div
-              className="pointer-events-none absolute left-0 top-0 rounded-[6px] border-[4px] border-ink bg-paper-2"
-              style={{
-                width: canvasDims.gridSize,
-                height: canvasDims.gridSize,
-                boxShadow: '8px 8px 0 var(--shadow)',
-              }}
+              className="pointer-events-none absolute left-0 top-0 border-[3px] border-ink bg-paper-2"
+              style={{ width: '100%', height: canvasDims.gridSize }}
             />
             <div
               className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-3 sm:p-5"
               style={{
                 background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
-                width: canvasDims.gridSize,
+                width: '100%',
                 height: canvasDims.trayH,
-                boxShadow: '6px 6px 0 var(--shadow)',
               }}
             >
               {Array.from({ length: 3 }).map((_, index) => (
@@ -1615,10 +1617,10 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
           </>
         )}
 
-        <div className="relative z-[2]" style={{ display: 'inline-block' }}>
+        <div className="relative z-[2] w-full">
           <canvas
             ref={canvasRef}
-            style={{ touchAction: 'none', display: 'block' }}
+            style={{ touchAction: 'none', display: 'block', width: '100%' }}
           />
 
           {/* Bomb targeting overlay — intercepts grid taps when bomb mode active */}

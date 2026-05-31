@@ -5,6 +5,7 @@ import AppFooter from './components/AppFooter'
 import SplashScreen from './components/SplashScreen'
 import { ShopModal } from './components/ShopModal'
 import { isShopLotteryEnabled } from './utils/featureFlags'
+import { usePowerUpStore } from './stores/powerUpStore'
 
 // Lazy-loaded: these are large chunks not needed on initial paint
 const GameScreen = lazy(() => import('./components/GameScreen'))
@@ -39,6 +40,12 @@ const App: React.FC = () => {
   const [showLobbyShop, setShowLobbyShop] = useState(false)
   const { address } = useAccount()
   const isWhitelisted = isShopLotteryEnabled(address)
+
+  // Ensure powerUpStore always has currentAddress set as soon as wallet connects,
+  // so lobby purchases (addInventory) save to localStorage correctly.
+  useEffect(() => {
+    if (address) usePowerUpStore.getState().loadForAddress(address)
+  }, [address])
   const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
   // Hide the header bar while actively playing — the game chrome has its own back/pause
@@ -119,7 +126,7 @@ const App: React.FC = () => {
         activeView === 'lobby' ? 'min-h-screen pt-[64px] pb-20'
         : activeView === 'classic'
           ? isPlayingGame
-            ? 'h-dvh overflow-hidden pt-0 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-0 lg:pb-20'
+            ? 'h-dvh overflow-hidden pt-0 pb-[env(safe-area-inset-bottom)] lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-0 lg:pb-20'
             : 'h-dvh overflow-hidden pt-16 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-[64px] lg:pb-20'
         : activeView === 'tournament-play' ? 'pt-0 min-h-screen'
         : 'min-h-screen pt-[64px] pb-20 lg:items-center lg:pb-12'
