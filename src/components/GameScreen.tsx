@@ -41,6 +41,14 @@ import { IS_MINIPAY } from '../utils/miniPay'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
 import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
+import { LotteryModal } from './LotteryModal'
+import {
+  checkLotteryTrigger,
+  getRandomPrize,
+  markLotteryThreshold,
+  resetLotterySession,
+} from '../utils/lottery'
+import type { Prize } from '../utils/lottery'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -456,6 +464,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const showNoGasModal = hasNoGas && !noGasDismissed
 
+  // ─── Lottery ────────────────────────────────────────────────────────────
+  const [lotteryPrize, setLotteryPrize]       = useState<Prize | null>(null)
+  const [lotteryThreshold, setLotteryThreshold] = useState<number>(0)
+  const prevScoreRef = useRef<number>(0)
+
   // ─── Social nudge ───────────────────────────────────────────────────────
   const [showSocialNudge, setShowSocialNudge] = useState(false)
 
@@ -597,6 +610,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const freshTier = getScoreTier(0)
     currentTierRef.current = freshTier
     document.documentElement.setAttribute('data-tier', '0')
+    // Reset lottery so each new game gets fresh threshold triggers
+    resetLotterySession()
+    prevScoreRef.current = 0
+    setLotteryPrize(null)
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
     if (
@@ -908,6 +925,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
             })
           }
         }
+
+        // ── Lottery threshold check ──────────────────────────────────────
+        const currentScore = currentSession.score
+        const prevScore    = prevScoreRef.current
+        if (currentScore !== prevScore) {
+          const threshold = checkLotteryTrigger(currentScore, prevScore)
+          if (threshold !== null) {
+            markLotteryThreshold(threshold)
+            const prize = getRandomPrize()
+            setLotteryThreshold(threshold)
+            setLotteryPrize(prize)
+          }
+          prevScoreRef.current = currentScore
+        }
       }
       // Always push the current tier into renderers every frame so a reset
       // (currentTierRef snapped to PAPER in handleStartGame / isGameOver effect)
@@ -1054,6 +1085,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+        {lotteryPrize && !isGameOver && (
+          <LotteryModal
+            prize={lotteryPrize}
+            threshold={lotteryThreshold}
+            onContinue={() => setLotteryPrize(null)}
+          />
+        )}
       </>
     )
   }
@@ -1070,6 +1108,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
       {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+      {lotteryPrize && !isGameOver && (
+        <LotteryModal
+          prize={lotteryPrize}
+          threshold={lotteryThreshold}
+          onContinue={() => setLotteryPrize(null)}
+        />
+      )}
     </>
   )
 }
