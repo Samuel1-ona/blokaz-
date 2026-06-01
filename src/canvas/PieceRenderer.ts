@@ -84,7 +84,7 @@ export class PieceRenderer {
         )
       }
 
-      if (!shape || isDragging) return
+      if (!shape) return
 
       const color = palette[shape.colorId as keyof typeof palette]
       const baseScale = isSelected ? 0.65 : 0.6
@@ -95,6 +95,10 @@ export class PieceRenderer {
       const x = index * slotWidth + (slotWidth - pieceWidth) / 2
       const y = this.trayY + (slotWidth - pieceHeight) / 2
 
+      // When dragging, dim the piece in the tray (shows it's been "lifted")
+      // instead of hiding it entirely — keeps the slot readable.
+      if (isDragging) this.ctx.globalAlpha = 0.28
+
       this.ctx.save()
       const accent = this.tier?.accent ?? '#b7ff3b'
       this.ctx.shadowColor = isSelected ? `${accent}66` : 'rgba(0,0,0,0.15)'
@@ -103,6 +107,8 @@ export class PieceRenderer {
       this.ctx.shadowBlur = isSelected ? 10 : 0
       this.drawShapeForTier(shape, x, y, displayCellSize, color, tierId)
       this.ctx.restore()
+
+      if (isDragging) this.ctx.globalAlpha = 1.0
     })
   }
 
@@ -115,16 +121,36 @@ export class PieceRenderer {
   ): void {
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
     const color = palette[shape.colorId as keyof typeof palette]
-    const dragY = y - 40
     const tierId = this.tier?.id ?? 0
-    this.drawShapeForTier(
-      shape,
-      x - (shape.width * cellSize) / 2,
-      dragY - (shape.height * cellSize) / 2,
-      cellSize,
-      color,
-      tierId
-    )
+    const originX = x - (shape.width  * cellSize) / 2
+    const originY = y - (shape.height * cellSize) / 2
+
+    // ── Soft drop shadow ─────────────────────────────────────────────────────
+    // Blurred dark cells offset below the piece — gives a physical "lifted"
+    // feel and lets the player track the piece's position over the board.
+    const blurPx = Math.max(2, Math.ceil(cellSize * 0.3))
+    const sdx = cellSize * 0.05
+    const sdy = cellSize * 0.35
+
+    this.ctx.save()
+    this.ctx.globalAlpha = 0.28
+    this.ctx.filter = `blur(${blurPx}px)`
+    this.ctx.fillStyle = '#000'
+    for (const [dr, dc] of shape.cells as [number, number][]) {
+      this.ctx.fillRect(
+        originX + dc * cellSize + sdx,
+        originY + dr * cellSize + sdy,
+        cellSize - 1,
+        cellSize - 1
+      )
+    }
+    this.ctx.restore() // also resets filter
+
+    // ── Piece itself ─────────────────────────────────────────────────────────
+    this.ctx.save()
+    this.ctx.globalAlpha = 0.92
+    this.drawShapeForTier(shape, originX, originY, cellSize, color, tierId)
+    this.ctx.restore()
   }
 
   resize(trayY: number, cellSize: number, canvasWidth: number): void {

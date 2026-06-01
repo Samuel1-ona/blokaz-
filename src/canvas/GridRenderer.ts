@@ -73,7 +73,7 @@ export class GridRenderer {
 
   draw(
     grid: Uint8Array,
-    ghostCells?: { row: number; col: number; valid: boolean }[],
+    ghostCells?: { row: number; col: number; valid: boolean; colorId?: number }[],
     isTournament: boolean = false
   ): void {
     this.ctx.clearRect(0, 0, this.gridSize, this.gridSize)
@@ -127,46 +127,99 @@ export class GridRenderer {
       this.ctx.stroke()
     }
 
-    // Row/column completion hint — highlight lines that would clear on placement
+    // ── Pre-compute which rows / cols will clear when ghost lands ────────────
+    const clearingRows: number[] = []
+    const clearingCols: number[] = []
     if (ghostCells && ghostCells.length > 0 && ghostCells[0].valid) {
       const ghostSet = new Set(ghostCells.map((g) => `${g.row},${g.col}`))
-      const accent = this.tier?.accent ?? '#b7ff3b'
-      // Parse accent hex to rgba
-      const r = parseInt(accent.slice(1, 3), 16)
-      const g = parseInt(accent.slice(3, 5), 16)
-      const b = parseInt(accent.slice(5, 7), 16)
-      this.ctx.fillStyle = `rgba(${r},${g},${b},0.15)`
       for (let row = 0; row < 9; row++) {
-        let willComplete = true
+        let ok = true
         for (let col = 0; col < 9; col++) {
-          if (Grid.getCell(grid, row, col) === 0 && !ghostSet.has(`${row},${col}`)) {
-            willComplete = false
-            break
-          }
+          if (Grid.getCell(grid, row, col) === 0 && !ghostSet.has(`${row},${col}`)) { ok = false; break }
         }
-        if (willComplete) {
-          this.ctx.fillRect(3, row * this.cellSize + 3, this.gridSize - 6, this.cellSize - 6)
-        }
+        if (ok) clearingRows.push(row)
       }
       for (let col = 0; col < 9; col++) {
-        let willComplete = true
+        let ok = true
         for (let row = 0; row < 9; row++) {
-          if (Grid.getCell(grid, row, col) === 0 && !ghostSet.has(`${row},${col}`)) {
-            willComplete = false
-            break
+          if (Grid.getCell(grid, row, col) === 0 && !ghostSet.has(`${row},${col}`)) { ok = false; break }
+        }
+        if (ok) clearingCols.push(col)
+      }
+    }
+
+    // ── PASS 1: clearing-line fill — drawn BEFORE ghost cells ────────────────
+    if (clearingRows.length > 0 || clearingCols.length > 0) {
+      const accent = this.tier?.accent ?? '#b7ff3b'
+      const cr = parseInt(accent.slice(1, 3), 16)
+      const cg = parseInt(accent.slice(3, 5), 16)
+      const cb = parseInt(accent.slice(5, 7), 16)
+      const pulse = 0.5 + 0.5 * Math.sin(this.t * 5)          // 0 → 1, ~0.8 Hz
+      const fillAlpha = 0.38 + pulse * 0.24                    // 0.38 – 0.62
+
+      this.ctx.fillStyle = `rgba(${cr},${cg},${cb},${fillAlpha})`
+      for (const row of clearingRows) {
+        this.ctx.fillRect(0, row * this.cellSize, this.gridSize, this.cellSize)
+      }
+      for (const col of clearingCols) {
+        this.ctx.fillRect(col * this.cellSize, 0, this.cellSize, this.gridSize)
+      }
+
+      // White shimmer stripe on the top half of each occupied cell in the line
+      // — makes already-placed blocks look "lit up"
+      this.ctx.fillStyle = `rgba(255,255,255,${0.18 + pulse * 0.12})`
+      const stripeH = Math.ceil(this.cellSize * 0.28)
+      for (const row of clearingRows) {
+        for (let col = 0; col < 9; col++) {
+          if (Grid.getCell(grid, row, col) !== 0) {
+            this.ctx.fillRect(col * this.cellSize + 2, row * this.cellSize + 2, this.cellSize - 4, stripeH)
           }
         }
-        if (willComplete) {
-          this.ctx.fillRect(col * this.cellSize + 3, 3, this.cellSize - 6, this.gridSize - 6)
+      }
+      for (const col of clearingCols) {
+        for (let row = 0; row < 9; row++) {
+          if (Grid.getCell(grid, row, col) !== 0) {
+            this.ctx.fillRect(col * this.cellSize + 2, row * this.cellSize + 2, this.cellSize - 4, stripeH)
+          }
         }
       }
     }
 
-    // Ghost preview
+    // ── Ghost preview — rendered as solid piece cells ─────────────────────────
     if (ghostCells) {
+      const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
       for (const ghost of ghostCells) {
-        this.drawGhostCell(ghost.row, ghost.col, ghost.valid)
+        const color = ghost.colorId !== undefined
+          ? palette[ghost.colorId as keyof typeof palette]
+          : undefined
+        this.drawGhostCell(ghost.row, ghost.col, ghost.valid, color)
       }
+    }
+
+    // ── PASS 2: clearing-line border — drawn AFTER ghost cells ───────────────
+    // Rendered on top so the glow is never obscured by the ghost piece
+    if (clearingRows.length > 0 || clearingCols.length > 0) {
+      const accent = this.tier?.accent ?? '#b7ff3b'
+      const cr = parseInt(accent.slice(1, 3), 16)
+      const cg = parseInt(accent.slice(3, 5), 16)
+      const cb = parseInt(accent.slice(5, 7), 16)
+      const pulse = 0.5 + 0.5 * Math.sin(this.t * 5)
+      const strokeAlpha = 0.75 + pulse * 0.25                  // 0.75 – 1.0
+
+      this.ctx.save()
+      this.ctx.strokeStyle = `rgba(${cr},${cg},${cb},${strokeAlpha})`
+      this.ctx.lineWidth = 3
+      this.ctx.setLineDash([])
+      this.ctx.shadowColor = `rgba(${cr},${cg},${cb},${0.55 + pulse * 0.3})`
+      this.ctx.shadowBlur = 10 + pulse * 6
+
+      for (const row of clearingRows) {
+        this.ctx.strokeRect(2, row * this.cellSize + 2, this.gridSize - 4, this.cellSize - 4)
+      }
+      for (const col of clearingCols) {
+        this.ctx.strokeRect(col * this.cellSize + 2, 2, this.cellSize - 4, this.gridSize - 4)
+      }
+      this.ctx.restore()
     }
   }
 
@@ -676,14 +729,21 @@ export class GridRenderer {
     this.ctx.fillRect(x, y, size, size)
   }
 
-  private drawGhostCell(row: number, col: number, valid: boolean): void {
+  private drawGhostCell(row: number, col: number, valid: boolean, color?: string): void {
     const pad = 1
     const x = col * this.cellSize + pad
     const y = row * this.cellSize + pad
     const size = this.cellSize - pad * 2
     if (size <= 0) return
 
-    if (valid) {
+    if (valid && color) {
+      // Render as the real piece at 75% opacity — player sees exactly what
+      // they're placing, using the same tier-styled cell as placed blocks.
+      this.ctx.globalAlpha = 0.75
+      this.drawCellForTier(row, col, color, this.tier?.id ?? 0, 0)
+      this.ctx.globalAlpha = 1.0
+    } else if (valid) {
+      // Fallback when no color provided: accent tint
       const accent = this.tier?.accent ?? '#8cff3c'
       const r = parseInt(accent.slice(1, 3), 16)
       const g = parseInt(accent.slice(3, 5), 16)
@@ -695,6 +755,7 @@ export class GridRenderer {
       this.ctx.setLineDash([])
       this.ctx.strokeRect(x + 1, y + 1, size - 2, size - 2)
     } else {
+      // Invalid placement: red dashed overlay
       this.ctx.fillStyle = 'rgba(255, 55, 55, 0.32)'
       this.ctx.fillRect(x, y, size, size)
       this.ctx.strokeStyle = 'rgba(220, 30, 30, 0.75)'

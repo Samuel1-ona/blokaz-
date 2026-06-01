@@ -1038,15 +1038,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
         const shape = currentSession.currentPieces[dragState.dragIndex]
         if (shape) {
           const cs = cellSizeRef.current
-          // If there's a valid ghost position, draw the piece aligned with the
-          // guide cells so visual and placement indicator always match.
-          // Otherwise fall back to the raw finger position.
+          // Ghost is positioned above the finger (touch) or at the cursor (mouse).
+          // Draw the floating piece exactly at the ghost bounding-box center so
+          // the piece and the board shadow always align.
+          // Without a ghost, centre the piece at the raw position; on touch lift
+          // it above the finger so the user can see what's being dragged.
           const drawX = ghost
             ? ghost.col * cs + (shape.width  * cs) / 2
             : dragState.dragPos.x
           const drawY = ghost
             ? ghost.row * cs + (shape.height * cs) / 2
-            : dragState.dragPos.y
+            : dragState.isTouch
+              ? dragState.dragPos.y - cs * (shape.height * 0.5 + 1)
+              : dragState.dragPos.y
           pieceRenderer.drawDragging(shape, drawX, drawY, cs, false)
         }
       }
@@ -1998,11 +2002,11 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             />
           </div>
 
-          {/* ── Power-up bar ──────────────────────────────────────────── */}
-          {!isGameOver && (
+          {/* ── Power-up bar — whitelisted addresses only ───────────── */}
+          {!isGameOver && !!onOpenShop && (
             <div className="shrink-0">
               <PowerUpBar
-                onOpenShop={onOpenShop ?? (() => {})}
+                onOpenShop={onOpenShop}
                 rotatePassEnabled={true}
                 onRotatePiece={onRotatePiece ?? (() => {})}
                 activePieceIndex={activePieceIndex ?? null}

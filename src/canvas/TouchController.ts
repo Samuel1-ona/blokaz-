@@ -17,6 +17,7 @@ export class TouchController {
   private destroyed: boolean = false
   private hoverIndex: number | null = null
   private lastGhostValid: boolean | null = null
+  private isTouch: boolean = false
 
   // Tap-to-select state
   private selectedIndex: number | null = null
@@ -47,7 +48,7 @@ export class TouchController {
   }
 
   // Bound handler references — kept so we can removeEventListener later
-  private _onMouseDown  = (e: MouseEvent) => this.handleStart(e)
+  private _onMouseDown  = (e: MouseEvent) => { this.isTouch = false; this.handleStart(e) }
   private _onMouseMove  = (e: MouseEvent) => this.handleMove(e)
   private _onMouseLeave = () => {
     if (!this.isDragging && this.hoverIndex !== null) {
@@ -59,6 +60,7 @@ export class TouchController {
 
   private _onTouchStart = (e: TouchEvent) => {
     e.preventDefault()
+    this.isTouch = true
     this.handleStart(e.touches[0] as any)
   }
   private _onTouchMove = (e: TouchEvent) => {
@@ -77,6 +79,7 @@ export class TouchController {
     this.ghostPos        = null
     this.lastGhostValid  = null
     this.hoverIndex      = null
+    this.isTouch         = false
     this.onHoverChange?.(null)
     ;(window as any).activeGhost = null
   }
@@ -253,7 +256,8 @@ export class TouchController {
       return
     }
 
-    // Active drag
+    // Active drag — on touch, offset the ghost above the finger so placement
+    // is visible without the finger covering the landing zone
     if (this.isDragging && this.dragIndex !== null) {
       this.dragPos = { x, y }
       const shape = pieces[this.dragIndex]
@@ -262,7 +266,7 @@ export class TouchController {
         ;(window as any).activeGhost = null
         return
       }
-      this.updateGhost(shape, e.clientX, e.clientY, false)
+      this.updateGhost(shape, e.clientX, e.clientY, this.isTouch)
       return
     }
 
@@ -342,6 +346,7 @@ export class TouchController {
       dragIndex: this.dragIndex,
       dragPos: this.dragPos,
       selectedIndex: this.selectedIndex,
+      isTouch: this.isTouch,
     }
   }
 }
