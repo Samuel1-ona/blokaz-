@@ -69,7 +69,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     gameSession,
     score,
     comboStreak,
-    isGameOver,
+    isGameOver: isGameOverStore,
     startGame,
     setOnChainData,
     forceReset,
@@ -77,6 +77,10 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     tournamentId,
     setTournamentId,
   } = useGameStore()
+
+  // Belt-and-suspenders: read from both the store field and the live session
+  // so the modal is never suppressed if the store update lags by a commit cycle
+  const isGameOver = (gameSession?.isGameOver ?? false) || isGameOverStore
 
   const { address, isConnected } = useAccount()
 
@@ -476,6 +480,11 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
 
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
+
+      // Safety net: force-sync isGameOver to the store if the engine is ahead
+      if (currentSession.isGameOver && !useGameStore.getState().isGameOver) {
+        useGameStore.setState({ isGameOver: true })
+      }
 
       const ghost = (window as any).activeGhost as {
         row: number

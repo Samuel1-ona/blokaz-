@@ -66,6 +66,16 @@ function replayMoveHistory(
   const session = new GameSession(seed)
   session.scoreBoostActive = scoreBoostActive
   for (const move of history) {
+    // Revival record — call revive() so the session's isGameOver flag is cleared
+    // and subsequent moves replay correctly with post-revival state.
+    if (move.revive) {
+      session.revive()
+      continue
+    }
+    if (move.bomb) {
+      session.bombZone(move.bomb.row, move.bomb.col)
+      continue
+    }
     if (move.rotations) {
       for (let i = 0; i < move.rotations; i++) session.rotatePiece(move.pieceIndex)
     }
@@ -447,7 +457,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     gameSession,
     score,
     comboStreak,
-    isGameOver,
+    isGameOver: isGameOverStore,
     startGame,
     setOnChainData,
     forceReset,
@@ -455,7 +465,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     onChainStatus,
     onChainSeed,
     onChainGameId,
+    reviveCount,
   } = useGameStore()
+
+  // Derive the authoritative game-over flag from BOTH the store field AND the
+  // mutable session object. The store field can lag by one React commit cycle
+  // in certain iOS/React-18 batching scenarios; reading the session directly
+  // ensures the modal is never suppressed when the engine has already ended.
+  const isGameOver = (gameSession?.isGameOver ?? false) || isGameOverStore
 
   const {
     loadForAddress,
@@ -763,6 +780,25 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }, [startGameError])
 
+  // Persist the move history immediately after every revival so the revive
+  // record is durable even if the app is killed before the next piece is placed.
+  // reviveCount increments on both manual revivals and shield auto-revivals.
+  useEffect(() => {
+    if (reviveCount === 0) return
+    const session = useGameStore.getState().gameSession
+    if (!session?.moveHistory.length) return
+    const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = {
+        moveHistory: session.moveHistory,
+        scoreBoostActive: session.scoreBoostActive,
+      }
+      localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [reviveCount])
+
   // Save snapshot when app is hidden (MiniPay pause / system multitask switch)
   useEffect(() => {
     const saveOnHide = () => {
@@ -957,6 +993,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
 
+      // Safety net: if the engine marks the game over but the store hasn't
+      // been updated yet (React-18 batching / iOS event-loop edge cases),
+      // force-sync so the modal is never permanently suppressed.
+      if (currentSession.isGameOver && !useGameStore.getState().isGameOver) {
+        useGameStore.setState({ isGameOver: true })
+      }
+
       // Tier sync — use session.score, NOT store.score.
       // store.score lags on game reset (still holds the previous game's value
       // when a new session starts at 0), which caused the old tier to
@@ -1104,6 +1147,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const session = useGameStore.getState().gameSession
     if (!session) return
     const pts = session.bombZone(row, col)
+    session.moveHistory.push({
+      pieceIndex: -1,
+      shapeId: '',
+      row: 0,
+      col: 0,
+      bomb: { row, col },
+      scoreEvent: {
+        basePoints: pts,
+        linePoints: 0,
+        comboBonus: 0,
+        totalPoints: pts,
+        linesCleared: 0,
+        newComboStreak: session.comboStreak,
+        comboMultiplier: 1.0,
+        isMilestone: false,
+        multiLineFactor: 1.0,
+      },
+    })
     consumeBomb()
     useGameStore.setState({ score: session.score })
     if (pts > 0) {

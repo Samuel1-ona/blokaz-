@@ -83,15 +83,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (result.isGameOver) {
       const shielded = usePowerUpStore.getState().triggerShield()
       if (shielded) {
+        // Record the shield-triggered revival so replayMoveHistory can call
+        // session.revive() at this exact position during session restore.
+        const minimalScoreEvent = {
+          basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+          linesCleared: 0, newComboStreak: gameSession.comboStreak,
+          comboMultiplier: 1 as const, isMilestone: false, multiLineFactor: 1 as const,
+        }
+        gameSession.moveHistory.push({
+          pieceIndex: -1, shapeId: '', row: 0, col: 0,
+          revive: true,
+          scoreEvent: minimalScoreEvent,
+        })
+
         gameSession.revive()
         // @ts-ignore
         window.currentPieces = gameSession.currentPieces
         set({
-          score:        gameSession.score,
-          comboStreak:  gameSession.comboStreak,
+          score:         gameSession.score,
+          comboStreak:   gameSession.comboStreak,
           currentPieces: [...gameSession.currentPieces],
-          isGameOver:   gameSession.isGameOver,   // accurate post-revive state
-          reviveCount:  reviveCount + 1,
+          isGameOver:    gameSession.isGameOver,
+          reviveCount:   reviveCount + 1,
         })
         return { ...result, isGameOver: gameSession.isGameOver }
       }
@@ -115,14 +128,34 @@ export const useGameStore = create<GameState>((set, get) => ({
   reviveGame: () => {
     const { gameSession, reviveCount } = get()
     if (!gameSession) return
-    gameSession.revive()
-    set({
-      isGameOver: false,
-      currentPieces: [...gameSession.currentPieces],
-      reviveCount: reviveCount + 1,
+
+    // Record the revival in moveHistory BEFORE mutating session state so the
+    // record sits at the correct position for replayMoveHistory to call revive()
+    // at exactly the right point during session restore.
+    const minimalScoreEvent = {
+      basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+      linesCleared: 0, newComboStreak: gameSession.comboStreak,
+      comboMultiplier: 1 as const, isMilestone: false, multiLineFactor: 1 as const,
+    }
+    gameSession.moveHistory.push({
+      pieceIndex: -1, shapeId: '', row: 0, col: 0,
+      revive: true,
+      scoreEvent: minimalScoreEvent,
     })
+
+    gameSession.revive()
     // @ts-ignore
     window.currentPieces = gameSession.currentPieces
+
+    set({
+      // Bug fix: use the session's actual isGameOver rather than hardcoding false.
+      // If the board is so full that deal() immediately sets isGameOver=true again
+      // the store reflects that immediately instead of freezing until the RAF catches up.
+      isGameOver:    gameSession.isGameOver,
+      score:         gameSession.score,
+      currentPieces: [...gameSession.currentPieces],
+      reviveCount:   reviveCount + 1,
+    })
   },
 
   forceReset: (keepTournamentId = false) => {

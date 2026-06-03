@@ -12,6 +12,8 @@ export interface MoveRecord {
   col: number
   scoreEvent: ScoreEvent
   rotations?: number  // 0-3 CW quarter-turns applied before placement
+  bomb?: { row: number; col: number }
+  revive?: true       // marks a revival point — replay must call session.revive() here
 }
 
 export interface PlaceResult {
