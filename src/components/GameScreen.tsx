@@ -631,6 +631,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
       if (!isConnected) setIsSyncingContract(false)
       return
     }
+    // If the RPC call came back undefined (network error / failed fetch), don't
+    // treat it as "no active game" — that would wipe out the in-memory gameId and
+    // make score submission impossible after a connectivity blip. Wait for a
+    // confirmed response before touching any on-chain state.
+    if (onChainActiveGameId === undefined) return
     const storedSession = readStoredGameSession(
       CLASSIC_SESSION_STORAGE_KEY,
       address,
