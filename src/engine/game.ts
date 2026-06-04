@@ -11,9 +11,11 @@ export interface MoveRecord {
   row: number
   col: number
   scoreEvent: ScoreEvent
-  rotations?: number  // 0-3 CW quarter-turns applied before placement
+  rotations?: number        // 0-3 CW quarter-turns applied before placement
   bomb?: { row: number; col: number }
-  revive?: true       // marks a revival point — replay must call session.revive() here
+  revive?: true             // marks a revival point — replay calls session.revive()
+  lotteryBonus?: number     // flat score bonus awarded by lottery — replay adds to session.score
+  lotteryMultiplierStart?: true  // lottery ×2 multiplier activated — replay sets lotteryMultiplierMovesLeft=3
 }
 
 export interface PlaceResult {
@@ -53,6 +55,9 @@ export class GameSession {
   dealCount: number = 0
   seed: bigint
   scoreBoostActive: boolean = false
+  // Lottery ×2 multiplier — counts down from 3 to 0 as pieces are placed.
+  // Replay restores this via a lotteryMultiplierStart record in moveHistory.
+  lotteryMultiplierMovesLeft: number = 0
 
   private rng: DeterministicRNG
 
@@ -141,12 +146,25 @@ export class GameSession {
       fullLines.cols
     )
 
-    const scoreEvent = calculateScore(
+    const baseEvent = calculateScore(
       piece,
       fullLines.rows.length + fullLines.cols.length,
       this.comboStreak,
       this.scoreBoostActive
     )
+
+    // Apply lottery ×2 multiplier if active — doubles total and base points,
+    // then counts down. The modified event is what gets saved to moveHistory
+    // so the recorded score matches what the player saw.
+    let scoreEvent = baseEvent
+    if (this.lotteryMultiplierMovesLeft > 0) {
+      scoreEvent = {
+        ...baseEvent,
+        basePoints:  baseEvent.basePoints  * 2,
+        totalPoints: baseEvent.totalPoints * 2,
+      }
+      this.lotteryMultiplierMovesLeft--
+    }
 
     this.score += scoreEvent.totalPoints
     this.comboStreak = scoreEvent.newComboStreak

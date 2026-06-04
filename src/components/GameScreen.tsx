@@ -66,14 +66,23 @@ function replayMoveHistory(
   const session = new GameSession(seed)
   session.scoreBoostActive = scoreBoostActive
   for (const move of history) {
-    // Revival record — call revive() so the session's isGameOver flag is cleared
-    // and subsequent moves replay correctly with post-revival state.
     if (move.revive) {
       session.revive()
       continue
     }
     if (move.bomb) {
       session.bombZone(move.bomb.row, move.bomb.col)
+      continue
+    }
+    // Lottery ×2 multiplier activation — restore the counter so the next 3
+    // placePiece calls inside the engine double their score, matching the live run.
+    if (move.lotteryMultiplierStart) {
+      session.lotteryMultiplierMovesLeft = 3
+      continue
+    }
+    // Lottery flat bonus — add directly to session score, no piece placement.
+    if (move.lotteryBonus) {
+      session.score += move.lotteryBonus
       continue
     }
     if (move.rotations) {
@@ -481,6 +490,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     bombModeActive,
     triggerShield,
     consumeBomb,
+    addInventory,
   } = usePowerUpStore()
 
   const [showShop, setShowShop] = useState(false)
@@ -1179,6 +1189,90 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }
 
+  // Apply a lottery prize once the player dismisses the modal.
+  // Each case records a marker in moveHistory where needed so the effect
+  // is faithfully reproduced when the session is replayed from localStorage.
+  const handleLotteryPrize = (prize: Prize | null) => {
+    setLotteryPrize(null)
+    if (!prize) return
+
+    const session = useGameStore.getState().gameSession
+
+    const minimalEvent = {
+      basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+      linesCleared: 0, newComboStreak: session?.comboStreak ?? 0,
+      comboMultiplier: 1.0 as const, isMilestone: false, multiLineFactor: 1.0 as const,
+    }
+
+    // Helper: persist the updated snapshot immediately so the prize survives
+    // an app kill before the next piece is placed.
+    const persistNow = (s: typeof session) => {
+      if (!s) return
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (!raw) return
+      try {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: s.moveHistory, scoreBoostActive: s.scoreBoostActive }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      } catch {}
+    }
+
+    switch (prize.id) {
+      case 'multi': {
+        // Activate ×2 multiplier on the engine for the next 3 piece placements.
+        // Record a marker in moveHistory so replay restores the multiplier at
+        // the exact same position in the move sequence.
+        if (session) {
+          session.moveHistory.push({ pieceIndex: -1, shapeId: '', row: 0, col: 0, lotteryMultiplierStart: true, scoreEvent: minimalEvent })
+          session.lotteryMultiplierMovesLeft = 3
+          persistNow(session)
+        }
+        break
+      }
+      case 'revival': {
+        // Credit one free revival to the player's inventory.
+        if (address) addInventory('revivalBundle', 1)
+        break
+      }
+      case 'bonus': {
+        // Drop +500 pts onto the score right now. Record in moveHistory so a
+        // session restore adds the same bonus at the same point in the replay.
+        if (session) {
+          const pts = 500
+          session.score += pts
+          useGameStore.setState({ score: session.score })
+          session.moveHistory.push({
+            pieceIndex: -1, shapeId: '', row: 0, col: 0,
+            lotteryBonus: pts,
+            scoreEvent: { ...minimalEvent, basePoints: pts, totalPoints: pts },
+          })
+          persistNow(session)
+          // Show the floating score animation over the board
+          animManagerRef.current?.trigger('SCORE', {
+            x: (canvasDims?.gridSize ?? 200) * 0.5,
+            y: (canvasDims?.gridSize ?? 200) * 0.45,
+            score: pts,
+          })
+          hapticNotification()
+        }
+        break
+      }
+      case 'cosmetic': {
+        // Write an unlock flag for when the cosmetics system ships.
+        try {
+          const current: string[] = JSON.parse(localStorage.getItem('blokaz:cosmetics_unlocked') ?? '[]')
+          if (!current.includes('lottery')) {
+            localStorage.setItem('blokaz:cosmetics_unlocked', JSON.stringify([...current, 'lottery']))
+          }
+        } catch {}
+        break
+      }
+      case 'nothing':
+      default:
+        break
+    }
+  }
+
   // Rotate: consume 1 charge, rotate the piece, close picker when charges run out
   const handleRotatePiece = (pieceIndex: number) => {
     const session = useGameStore.getState().gameSession
@@ -1256,7 +1350,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           <LotteryModal
             prize={lotteryPrize}
             threshold={lotteryThreshold}
-            onContinue={() => setLotteryPrize(null)}
+            onContinue={() => handleLotteryPrize(lotteryPrize)}
           />
         )}
         {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}

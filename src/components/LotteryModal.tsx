@@ -227,7 +227,7 @@ const SpinStatusBar: React.FC<{ phase: 'spinning' | 'decel' }> = ({ phase }) => 
       }} />
     </div>
     <div style={{ fontSize: 9, letterSpacing: '0.16em', opacity: 0.65, flexShrink: 0 }}>
-      5 PRIZES
+      5 REWARDS
     </div>
   </div>
 )
@@ -378,7 +378,7 @@ export const LotteryModal: React.FC<LotteryModalProps> = ({ prize, threshold, on
             padding: '4px 9px', fontSize: 11, letterSpacing: '0.14em',
             transform: 'rotate(-1.5deg)',
           }}>
-            LOTTERY SPIN
+            WHEEL SPIN
           </div>
           <div style={{
             background: YELLOW, color: INK,
@@ -445,12 +445,12 @@ export const LotteryModal: React.FC<LotteryModalProps> = ({ prize, threshold, on
                 border: `2px solid ${INK}`, flexShrink: 0,
               }} />
               <div>
-                <div style={{ fontSize: 13, letterSpacing: '-0.01em' }}>YOU EARNED A SPIN!</div>
+                <div style={{ fontSize: 13, letterSpacing: '-0.01em' }}>YOU EARNED A FREE SPIN!</div>
                 <div style={{
                   fontFamily: 'Space Grotesk, system-ui',
                   fontSize: 11, fontWeight: 700, opacity: 0.65, marginTop: 2,
                 }}>
-                  Tier threshold crossed. Tap SPIN to claim your prize.
+                  Score milestone reached. Tap SPIN to claim your reward.
                 </div>
               </div>
             </div>
@@ -483,7 +483,7 @@ export const LotteryModal: React.FC<LotteryModalProps> = ({ prize, threshold, on
                 animation: 'lotterySpinBtn 1.6s ease-in-out infinite',
               }}
             >
-              🎰 SPIN
+              🎡 SPIN THE WHEEL
             </button>
           )}
 
