@@ -584,7 +584,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
                   style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
                 >
-                  ❤️ USE REVIVAL CREDIT
+                  USE REVIVAL BUNDLE
                   <span
                     className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider"
                     style={{ background: 'var(--ink)', color: 'var(--paper)' }}
