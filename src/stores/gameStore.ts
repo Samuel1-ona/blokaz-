@@ -3,6 +3,7 @@ import { GameSession } from '../engine/game'
 import type { ShapeDefinition } from '../engine/shapes'
 // Imported lazily to avoid circular deps — accessed via getState() at call time
 import { usePowerUpStore } from './powerUpStore'
+import { CLASSIC_SESSION_STORAGE_KEY } from '../utils/gameSessionStorage'
 
 interface GameState {
   gameSession: GameSession | null
@@ -159,6 +160,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       reviveCount:                reviveCount + 1,
       lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
     })
+
+    // Persist the revive record synchronously so navigating away immediately
+    // after tapping revival doesn't lose it before useEffect([reviveCount]) fires.
+    try {
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (raw) {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: gameSession.moveHistory, scoreBoostActive: gameSession.scoreBoostActive }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      }
+    } catch {}
   },
 
   forceReset: (keepTournamentId = false) => {

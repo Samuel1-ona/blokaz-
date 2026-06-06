@@ -709,6 +709,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       if (stored?.snapshot?.moveHistory?.length) {
         const boost = !!(stored.snapshot as any).scoreBoostActive
         const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+        // Restore the original moveHistory so marker records (revive, bomb, lottery)
+        // are preserved. replayMoveHistory processes them without pushing them to
+        // the session's own moveHistory, which would corrupt future snapshots.
+        restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
         ;(window as any).currentPieces = restoredSession.currentPieces
         useGameStore.setState({
           gameSession: restoredSession,
@@ -1162,6 +1166,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const localSeed = BigInt(stored.hash.slice(0, 18))
     const boost = !!(stored.snapshot as any).scoreBoostActive
     const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+    // Replace the replayed moveHistory with the original snapshot moveHistory.
+    // replayMoveHistory processes marker records (revive, bomb, lottery) without
+    // pushing them to the session's moveHistory, so the replayed history is
+    // missing those markers. If the restored session later saves its moveHistory
+    // to localStorage, those markers would be lost and the next restore would
+    // replay incorrectly (post-revival moves silently fail at game-over state).
+    restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
     ;(window as any).currentPieces = restoredSession.currentPieces
     useGameStore.setState({
       gameSession: restoredSession,
@@ -1169,6 +1180,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
       comboStreak: restoredSession.comboStreak,
       currentPieces: [...restoredSession.currentPieces],
       isGameOver: restoredSession.isGameOver,
+      // Restore on-chain refs so the game-over modal can submit the score
+      // when the player continues into a finished-game state.
+      onChainSeed: stored.seed ?? null,
+      onChainGameId: stored.gameId ? BigInt(stored.gameId) : null,
+      onChainStatus: stored.gameId ? 'registered' as const : 'none' as const,
     })
   }
 
