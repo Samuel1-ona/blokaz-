@@ -499,7 +499,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const [showShop, setShowShop] = useState(false)
 
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, isReconnecting } = useAccount()
   const isWhitelisted = isShopLotteryEnabled(address)
 
   // ── No-gas detection ──────────────────────────────────────────────────────
@@ -780,9 +780,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Skip in MiniPay: isConnected is always false on first render because
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
+  // Also skip while isReconnecting — wagmi transiently sets isConnected=false
+  // during wallet reconnection (page reload, app resume). Without this guard
+  // a new practice-mode game would overwrite the player's stored session.
   useEffect(() => {
-    if (!isConnected && !gameSession && !IS_MINIPAY) handleStartGame()
-  }, [isConnected, gameSession])
+    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY) handleStartGame()
+  }, [isConnected, isReconnecting, gameSession])
 
   // 4. Start tx rejection → abandon session and go back to lobby
   useEffect(() => {
@@ -835,6 +838,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
     document.addEventListener('visibilitychange', saveOnHide)
     return () => document.removeEventListener('visibilitychange', saveOnHide)
   }, [])
+
+  // Save snapshot on every score change so navigating away (theme switcher, etc.)
+  // never rolls back to a stale snapshot.
+  useEffect(() => {
+    if (!score) return
+    const session = useGameStore.getState().gameSession
+    if (!session || session.isGameOver || !session.moveHistory.length) return
+    const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+      localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [score])
 
   // Canvas init
   useEffect(() => {
@@ -1341,6 +1359,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startNewGame,
     bombModeActive,
     onBombTap: handleBombTap,
+    onGoBack: () => forceReset(),
   }
 
   const canvasArea = (
@@ -1541,6 +1560,7 @@ interface CanvasAreaProps {
   startNewGame: () => void
   bombModeActive?: boolean
   onBombTap?: (row: number, col: number) => void
+  onGoBack?: () => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1790,6 +1810,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   startNewGame,
   bombModeActive,
   onBombTap,
+  onGoBack,
 }) => {
   if (!gameSession) {
     return (
@@ -1902,6 +1923,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
             <GameOverModal
               score={score}
               onPlayAgain={handleStartGame}
+              onBack={onGoBack}
               onOpenLeaderboard={onOpenLeaderboard}
               mode="classic"
             />

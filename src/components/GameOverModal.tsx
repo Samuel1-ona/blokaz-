@@ -36,6 +36,7 @@ const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 interface GameOverModalProps {
   score: number
   onPlayAgain: () => void
+  onBack?: () => void
   mode: 'classic' | 'tournament'
   onOpenLeaderboard?: () => void
 }
@@ -46,6 +47,7 @@ const EMPTY_HASH =
 const GameOverModal: React.FC<GameOverModalProps> = ({
   score,
   onPlayAgain,
+  onBack,
   mode,
   onOpenLeaderboard,
 }) => {
@@ -479,7 +481,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               GAME OVER
             </span>
             <button
-              onClick={handleAbandon}
+              onClick={onBack ?? handleAbandon}
               className="brutal-btn flex h-9 w-9 items-center justify-center border-[3px] border-white text-white"
               style={{
                 background: 'rgba(0,0,0,0.25)',
