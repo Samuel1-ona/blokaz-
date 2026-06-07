@@ -854,12 +854,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => document.removeEventListener('visibilitychange', saveOnHide)
   }, [])
 
-  // Save snapshot on every score change so navigating away (theme switcher, etc.)
-  // never rolls back to a stale snapshot.
+  // Save snapshot on every score change — including the game-over move.
+  // Without saving on game-over, a single move that jumps score AND ends the
+  // game (e.g. 218 → 5k via a big combo clear) leaves localStorage at the
+  // pre-combo score; the player loses the session on navigation.
   useEffect(() => {
     if (!score) return
     const session = useGameStore.getState().gameSession
-    if (!session || session.isGameOver || !session.moveHistory.length) return
+    if (!session || !session.moveHistory.length) return
     const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
     if (!raw) return
     try {

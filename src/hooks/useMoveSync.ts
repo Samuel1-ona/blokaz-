@@ -67,6 +67,9 @@ export function useMoveSync() {
   const registeredSeedRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSyncedMoveCountRef = useRef(0)
+  // Preserved even after forceReset() sets gameSession to null, so the
+  // unmount flush can still send the final state to the server.
+  const lastKnownSessionRef = useRef(useGameStore.getState().gameSession)
 
   // /session/start — fires when a new game session appears
   useEffect(() => {
@@ -83,12 +86,17 @@ export function useMoveSync() {
     })
   }, [address, gameSeed, onChainGameId, onChainSeed])
 
-  // Ref-based callback so the debounce closure always reads latest state
+  // Ref-based callback so the debounce closure always reads latest state.
+  // Falls back to lastKnownSessionRef so the unmount flush still fires even
+  // after forceReset() has set gameSession to null (e.g. back-to-lobby tap).
   const syncNowRef = useRef<() => void>(() => {})
   useEffect(() => {
     syncNowRef.current = () => {
-      const { gameSession: session } = useGameStore.getState()
+      const storeState = useGameStore.getState()
+      const session = storeState.gameSession ?? lastKnownSessionRef.current
       if (!session || !address) return
+      // Update the preserved reference whenever we sync
+      lastKnownSessionRef.current = session
       lastSyncedMoveCountRef.current = session.moveHistory.length
       post('/session/sync', {
         address,
@@ -103,6 +111,12 @@ export function useMoveSync() {
       })
     }
   }, [address, isGameOver, reviveCount, onChainGameId, onChainSeed])
+
+  // Keep lastKnownSessionRef up to date whenever gameSession changes
+  useEffect(() => {
+    const session = useGameStore.getState().gameSession
+    if (session) lastKnownSessionRef.current = session
+  }, [gameSeed, score])
 
   // Debounced sync after every score change
   useEffect(() => {
