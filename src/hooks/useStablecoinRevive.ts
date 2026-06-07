@@ -8,6 +8,7 @@ import {
 } from '../constants/contracts'
 import { useGameStore } from '../stores/gameStore'
 import { isMiniPay } from '../utils/miniPay'
+import { logPurchase } from './useInventorySync'
 
 const ERC20_TRANSFER_ABI = [
   {
@@ -134,6 +135,8 @@ export function useStablecoinRevive() {
         // has actually changed when wagmi queries it.
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
         refetchBalances()
+        // Log the confirmed purchase to the server (permanent receipt)
+        logPurchase(address, 'revivalBundle', 3, sym, txHash)
         reviveGame()
         return true
       } catch (err: any) {

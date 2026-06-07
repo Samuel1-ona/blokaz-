@@ -8,6 +8,7 @@ import {
 } from '../constants/contracts'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { isMiniPay } from '../utils/miniPay'
+import { logPurchase } from './useInventorySync'
 
 const ERC20_TRANSFER_ABI = [
   {
@@ -133,6 +134,8 @@ export function useStablecoinShop() {
         // Grant the item: revivalBundle = 3 revival credits, others = 1 use
         const qty = itemId === 'revivalBundle' ? 3 : 1
         addInventory(itemId, qty)
+        // Log the confirmed purchase to the server (permanent receipt + server inventory credit)
+        logPurchase(address, itemId, qty, sym, txHash)
         return true
       } catch (err: any) {
         console.error('Shop tx error:', err)
