@@ -1200,7 +1200,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
       : stored?.hash ?? serverSession?.seed
     if (!seedStr) return
 
-    const localSeed = BigInt(seedStr.slice(0, 18))
+    // The server stores the seed as a plain decimal string (bigint.toString()),
+    // e.g. "1587430469997234145" (can be 19–20 digits).
+    // localStorage stores the keccak256 hash as "0x…" (66 chars); the local
+    // seed is always the first 8 bytes → "0x" + 16 hex chars = exactly 18 chars.
+    // Applying slice(0,18) to a decimal string silently truncates it when it
+    // has more than 18 digits, producing a completely wrong seed and a broken
+    // replay — which is why the score would collapse to 99 after a lobby visit.
+    const localSeed = seedStr.startsWith('0x')
+      ? BigInt(seedStr.slice(0, 18))   // hex hash: take first 8 bytes
+      : BigInt(seedStr)                // decimal: use the exact value
     const boost = serverMoves.length >= localMoves.length
       ? !!serverSession!.scoreBoostActive
       : !!(stored?.snapshot as any)?.scoreBoostActive

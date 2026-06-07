@@ -71,12 +71,20 @@ export function useMoveSync() {
   // unmount flush can still send the final state to the server.
   const lastKnownSessionRef = useRef(useGameStore.getState().gameSession)
 
-  // /session/start — fires when a new game session appears
+  // /session/start — fires when a genuinely new game session appears.
+  // Skipped for restored/continued sessions (moveHistory already populated) so
+  // we don't abandon the existing server record and race with the first sync.
   useEffect(() => {
     if (!address || !gameSeed || gameSeed === '0') return
     if (registeredSeedRef.current === gameSeed) return
     registeredSeedRef.current = gameSeed
     lastSyncedMoveCountRef.current = 0
+
+    // If the session already has moves it was restored via continueGame() —
+    // the server record still exists and the next sync will update it.
+    // Only fire /session/start for brand-new games (empty history).
+    const session = useGameStore.getState().gameSession
+    if (session && session.moveHistory.length > 0) return
 
     post('/session/start', {
       address,
