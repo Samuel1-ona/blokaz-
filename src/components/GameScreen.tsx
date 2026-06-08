@@ -1243,15 +1243,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
       // Restore on-chain refs so the game-over modal can submit the score
       // when the player continues into a finished-game state.
       onChainSeed: onChainSeedVal,
-      onChainGameId: onChainGameIdRaw ? BigInt(onChainGameIdRaw) : null,
-      onChainStatus: onChainGameIdRaw ? 'registered' as const : 'none' as const,
+      onChainGameId: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? BigInt(onChainGameIdRaw) : null,
+      onChainStatus: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? 'registered' as const : 'none' as const,
     })
 
     // If the game was never registered on-chain (user ignored/dismissed the
     // wallet prompt at game start), re-trigger the contract call now so the
     // score can be submitted when the game ends. The background sync effect
     // already polls for the new game ID and updates localStorage once confirmed.
-    if (!onChainGameIdRaw && onChainSeedVal && isConnected && address) {
+    // Note: treat "0" (string) the same as null/missing — the DB stores "0"
+    // when the on-chain game ID was never confirmed.
+    const gameIdMissing = !onChainGameIdRaw || onChainGameIdRaw === '0'
+    if (gameIdMissing && onChainSeedVal && isConnected && address) {
       const hash = (stored?.hash ?? stored?.seed ?? onChainSeedVal) as `0x${string}`
       setCurrentSeed({ seed: onChainSeedVal as `0x${string}`, hash })
       contractStartGame(hash)

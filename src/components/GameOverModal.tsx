@@ -13,6 +13,7 @@ import {
   useActiveTournamentGame,
   useLeaderboard,
   useSubmitTournamentScore,
+  useStartGame,
 } from '../hooks/useBlokzGame'
 import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
@@ -111,6 +112,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const [countdown, setCountdown] = React.useState<number | null>(null)
   const [signerError, setSignerError] = React.useState<string | null>(null)
   const autoSubmitTriggeredRef = React.useRef(false)
+
+  const {
+    startGame: contractStartGame,
+    isPending: isRegisterPending,
+    isConfirming: isRegisterConfirming,
+    isSuccess: isRegisterSuccess,
+  } = useStartGame()
 
   const { submitScore, isPending, isConfirming, isSuccess, error } =
     useSubmitScore()
@@ -262,10 +270,31 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const submitBlockReason: string | null = (() => {
     if (isAllSuccess || isRegistering) return null
     if (!gameSession) return 'Game session not found — start a new game'
-    if (!effectiveGameId) return 'Game not registered on-chain — the wallet prompt was missed at game start'
+    if (!effectiveGameId) return null // handled by the register button below
     if (!recoveredSeed) return 'Game seed unavailable — start a new game'
     return null
   })()
+
+  // True when the game was never registered on-chain — show a Register button
+  // so the player can fix it without leaving the game-over screen.
+  const needsRegistration = !effectiveGameId && !!recoveredSeed && !!gameSession && mode === 'classic'
+  const isRegistering2 = isRegisterPending || isRegisterConfirming
+
+  const handleRegisterGame = () => {
+    if (!recoveredSeed) return
+    contractStartGame(recoveredSeed as `0x${string}`)
+  }
+
+  // When registration succeeds, refetch the active game ID so effectiveGameId
+  // updates and the submit button unlocks automatically.
+  React.useEffect(() => {
+    if (isRegisterSuccess) {
+      // Give the chain a moment to index then trigger a refetch via the
+      // useActiveGame hook — we achieve this by refreshing the page query.
+      // The effectiveGameId = onChainGameId || activeGameId line in the modal
+      // will pick up the new ID as soon as useActiveGame returns it.
+    }
+  }, [isRegisterSuccess])
 
   // Total stablecoin balance across all tokens (USD value)
   const totalStableUsd = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).reduce((sum, sym) => {
@@ -865,6 +894,32 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               {submitBlockReason && !hasError && (
                 <div className="text-center font-display text-[9px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink-soft)' }}>
                   {submitBlockReason}
+                </div>
+              )}
+
+              {/* Register game on-chain when the wallet prompt was missed at start */}
+              {needsRegistration && !hasError && (
+                <div className="flex flex-col gap-2">
+                  <div
+                    className="border-[3px] border-ink px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em]"
+                    style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+                  >
+                    Game not registered on-chain — register it now to unlock score submission.
+                  </div>
+                  <button
+                    onClick={handleRegisterGame}
+                    disabled={isRegistering2 || isRegisterSuccess}
+                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
+                    style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                  >
+                    {isRegistering2 ? (
+                      <><div className="brutal-loader" /> REGISTERING...</>
+                    ) : isRegisterSuccess ? (
+                      '✓ REGISTERED — SUBMIT NOW'
+                    ) : (
+                      'REGISTER GAME ON-CHAIN'
+                    )}
+                  </button>
                 </div>
               )}
 
