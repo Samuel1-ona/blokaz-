@@ -4,6 +4,9 @@ import { GridRenderer } from '../canvas/GridRenderer'
 import { PieceRenderer } from '../canvas/PieceRenderer'
 import { TouchController } from '../canvas/TouchController'
 import { AnimationManager } from '../canvas/AnimationManager'
+import { PowerUpHintManager } from '../canvas/PowerUpHintManager'
+import type { HintType } from '../canvas/PowerUpHintManager'
+import { PowerUpHintOverlay } from './PowerUpHintOverlay'
 import { Grid } from '../engine/grid'
 import { SHAPES, TOTAL_WEIGHT } from '../engine/shapes'
 import type { ShapeDefinition } from '../engine/shapes'
@@ -459,6 +462,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boardContainerRef = useRef<HTMLDivElement>(null)
   const animManagerRef = useRef<AnimationManager>(new AnimationManager())
+  const powerUpHintRef = useRef<PowerUpHintManager>(new PowerUpHintManager())
   const lastTimeRef = useRef<number>(0)
   const trayHoverIndexRef = useRef<number | null>(null)
   const cellSizeRef = useRef<number>(0)
@@ -534,6 +538,17 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // ─── Social nudge ───────────────────────────────────────────────────────
   const [showSocialNudge, setShowSocialNudge] = useState(false)
+
+  // ─── Power-up hint overlay (two-phase: DOM hand → canvas effect) ─────────
+  const [hintTrigger, setHintTrigger] = useState<{ type: HintType; id: number } | null>(null)
+
+  // Register the auto-trigger callback once so the hint manager can fire the
+  // DOM hand animation at psychologically timed moments
+  useEffect(() => {
+    powerUpHintRef.current.setAutoTriggerCallback((type) => {
+      setHintTrigger(prev => ({ type, id: (prev?.id ?? 0) + 1 }))
+    })
+  }, [])
 
   // Load power-up inventory whenever the wallet changes
   useEffect(() => {
@@ -697,6 +712,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     // Reset lottery so each new game gets fresh threshold triggers
     resetLotterySession()
     prevScoreRef.current = 0
+    powerUpHintRef.current.notifyPiecePlaced(performance.now())
     setLotteryPrize(null)
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
@@ -970,6 +986,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           return
         }
         hapticImpact()
+        powerUpHintRef.current.notifyPiecePlaced(performance.now())
         // Brief drop-flash on placed cells
         if (preShape) {
           const placedCells = (preShape.cells as [number, number][])
@@ -983,6 +1000,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           (linesCleared.rows.length > 0 || linesCleared.cols.length > 0)
         ) {
           hapticNotification()
+          powerUpHintRef.current.notifyLineClear(performance.now())
           animManager.trigger('LINE_CLEAR', {
             rows: linesCleared.rows,
             cols: linesCleared.cols,
@@ -1151,6 +1169,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
 
       gridRenderer.draw(currentSession.grid, ghostCells, false)
+
+      // Power-up ghost hint — overlaid after board, before score popups
+      const isInteracting = dragState.isDragging || !!ghost
+      powerUpHintRef.current.update(
+        timestamp, delta, currentSession.grid,
+        !isInteracting && !currentSession.isGameOver,
+      )
+      powerUpHintRef.current.draw(ctx, cellSizeRef.current)
+
       pieceRenderer.drawTray(
         currentSession.currentPieces,
         activeIdx ?? undefined,
@@ -1542,6 +1569,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
           onOpenShop={isWhitelisted ? () => setShowShop(true) : undefined}
           onRotatePiece={handleRotatePiece}
           activePieceIndex={trayHoverIndexRef.current}
+        />
+        <PowerUpHintOverlay
+          hintTrigger={hintTrigger}
+          onBoardEffect={(type) => {
+            const grid = useGameStore.getState().gameSession?.grid
+            powerUpHintRef.current.commitCanvasHint(type, grid)
+          }}
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}

@@ -179,6 +179,7 @@ function PowerTile({
       {/* ── Button + stickers ── */}
       <div style={{ position: 'relative' }}>
         <button
+          id={`pu-tile-${id}`}
           onClick={onClick}
           style={{
             width: 54, height: 54,
