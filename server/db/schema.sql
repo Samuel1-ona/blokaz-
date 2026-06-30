@@ -290,27 +290,6 @@ create or replace trigger player_inventory_updated_at
   before update on player_inventory
   for each row execute function set_updated_at();
 
--- ── rewards ───────────────────────────────────────────────────────────────────
--- Stores prize rewards issued to players (e.g. tournament winnings).
--- cash_link_url is never exposed in list queries — only returned at claim time.
-
-create table if not exists rewards (
-  id            uuid primary key default gen_random_uuid(),
-  address       text not null,
-  cash_link_url text not null,
-  amount        text not null,
-  token         text not null default 'USDT',
-  label         text not null,
-  claimed_at    timestamptz,
-  created_at    timestamptz not null default now()
-);
-
-create index if not exists idx_rewards_address
-  on rewards (address, created_at desc);
-
-alter table rewards enable row level security;
-create policy "service role only" on rewards as restrictive using (false) with check (false);
-
 -- ── Row-level security ────────────────────────────────────────────────────────
 -- All access goes through the server using the service role key.
 
