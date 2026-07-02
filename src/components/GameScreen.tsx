@@ -40,7 +40,8 @@ import {
   writeStoredGameSession,
   clearStoredGameSession,
 } from '../utils/gameSessionStorage'
-import { IS_MINIPAY } from '../utils/miniPay'
+import { IS_MINIPAY, isWebBrowser, markTrialUsed, isWebTrialGated } from '../utils/miniPay'
+import { MiniPayGateModal } from './MiniPayGateModal'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
 import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
@@ -579,9 +580,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => window.removeEventListener('pu-activated', handler)
   }, [])
 
-  // Load power-up inventory whenever the wallet changes
+  // Load power-up inventory — wallet address when connected, fixed trial key for web visitors
+  const WEB_TRIAL_ADDR = 'web-trial'
   useEffect(() => {
-    if (address) loadForAddress(address)
+    if (address) {
+      loadForAddress(address)
+    } else if (isWebBrowser()) {
+      loadForAddress(WEB_TRIAL_ADDR)
+    }
   }, [address, loadForAddress])
 
   // Sync score-boost flag directly onto the mutable GameSession
@@ -733,6 +739,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
+    // Mark free web trial as consumed (no-op inside MiniPay)
+    if (isWebBrowser()) markTrialUsed()
     setSessionConflict(false)
     // Reset tier to T1 (PAPER) on new game
     const freshTier = getScoreTier(0)
@@ -840,11 +848,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Skip in MiniPay: isConnected is always false on first render because
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
-  // Also skip while isReconnecting — wagmi transiently sets isConnected=false
-  // during wallet reconnection (page reload, app resume). Without this guard
-  // a new practice-mode game would overwrite the player's stored session.
+  // Skip if reconnecting (wagmi transiently clears isConnected on page reload)
+  // or if the web trial is already gated — don't auto-start a blocked session.
   useEffect(() => {
-    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY) handleStartGame()
+    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY && !isWebTrialGated()) handleStartGame()
   }, [isConnected, isReconnecting, gameSession])
 
   // 4. Start tx rejection → abandon session and go back to lobby
@@ -1111,7 +1118,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
       lastTimeRef.current = timestamp
       animManager.update(delta)
 
-      // Update time for animated tier effects
+      // Update time for animated tier effects (seconds, not ms)
       const tSec = timestamp / 1000
       gridRenderer.setTime(tSec)
       pieceRenderer.setTime(tSec)
@@ -1145,6 +1152,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
               tierName: newTier.name,
               accent: newTier.accent,
             })
+            audioEngine.tierUp()
           }
         }
 
@@ -1586,6 +1594,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
       )}
     </div>
   )
+
+  // Show lobby gate immediately for web visitors who have used their trial
+  // (and aren't currently in a game-over state, which has its own gate via CanvasArea)
+  if (isWebBrowser() && isWebTrialGated() && !gameSession) {
+    return <MiniPayGateModal />
+  }
 
   if (isMobile) {
     return (
@@ -2124,13 +2138,17 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
           <ComboOverlay streak={comboStreak} trigger={comboTrigger} />
 
           {isGameOver && (
-            <GameOverModal
-              score={score}
-              onPlayAgain={handleStartGame}
-              onBack={onGoBack}
-              onOpenLeaderboard={onOpenLeaderboard}
-              mode="classic"
-            />
+            isWebBrowser()
+              ? <MiniPayGateModal score={score} />
+              : (
+                <GameOverModal
+                  score={score}
+                  onPlayAgain={handleStartGame}
+                  onBack={onGoBack}
+                  onOpenLeaderboard={onOpenLeaderboard}
+                  mode="classic"
+                />
+              )
           )}
         </div>
       </div>

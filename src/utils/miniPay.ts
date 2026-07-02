@@ -22,7 +22,7 @@ export const isWebBrowser = (): boolean => !isMiniPay()
 
 // ─── Free-trial gate (web-only) ───────────────────────────────────────────────
 const TRIAL_KEY = 'blokaz:web_trials_used'
-const MAX_TRIALS = 3
+const MAX_TRIALS = 1
 
 function getTrialsUsed(): number {
   try { return parseInt(localStorage.getItem(TRIAL_KEY) ?? '0', 10) || 0 } catch { return 0 }

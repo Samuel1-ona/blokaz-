@@ -12,6 +12,8 @@ import {
 import { useTheme } from '../hooks/useTheme'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
+import { isWebBrowser, isWebTrialGated } from '../utils/miniPay'
+import { MiniPayGateModal } from './MiniPayGateModal'
 import UsernameSetupModal, {
   hasDismissedUsernamePrompt,
 } from './UsernameSetupModal'
@@ -792,40 +794,61 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
       {/* Play Classic */}
       <FadeUp delay={340}>
-        <button
-          onClick={onPlayClassic}
-          className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
-          style={{
-            background: 'var(--danger)',
-            boxShadow: '5px 5px 0 var(--shadow)',
-          }}
-        >
-          <div
-            className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
-            style={{ background: 'var(--ink-fixed)' }}
-          >
-            <span
-              className="font-display text-2xl"
+        <div className="relative">
+          {isWebBrowser() && (
+            <div
               style={{
-                color: 'var(--accent-yellow)',
-                animation: 'lobbyPulsePlay 2.4s ease-in-out infinite',
+                position: 'absolute',
+                top: -10,
+                left: 12,
+                zIndex: 10,
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 9,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                background: '#ffd51f',
+                color: '#0c0c10',
+                border: '2px solid #0c0c10',
+                padding: '2px 10px',
+                animation: 'lobbyBadgePop 0.6s cubic-bezier(0.34,1.56,0.64,1) both',
+                animationDelay: '500ms',
               }}
             >
-              ▶
-            </span>
-          </div>
-          <div className="flex-1 px-4 py-4">
-            <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
-              PLAY CLASSIC <span className="text-2xl leading-none">→</span>
+              1 FREE TRIAL — MINIPAY TO COMPETE
             </div>
+          )}
+          <button
+            onClick={onPlayClassic}
+            className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
+            style={{
+              background: 'var(--danger)',
+              boxShadow: '5px 5px 0 var(--shadow)',
+            }}
+          >
             <div
-              className="mt-1 font-display text-[10px] tracking-[0.1em]"
-              style={{ color: '#FFFFFF' }}
+              className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
+              style={{ background: 'var(--ink-fixed)' }}
             >
-              Weekly leaderboard · Free
+              <span
+                className="font-display text-2xl"
+                style={{
+                  color: 'var(--accent-yellow)',
+                  animation: 'lobbyPulsePlay 2.4s ease-in-out infinite',
+                }}
+              >
+                ▶
+              </span>
             </div>
-          </div>
-        </button>
+            <div className="flex-1 px-4 py-4">
+              <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
+                PLAY CLASSIC <span className="text-2xl leading-none">→</span>
+              </div>
+              <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
+                {isWebBrowser() ? 'Web trial · MiniPay required to compete' : 'Weekly leaderboard · Free'}
+              </div>
+            </div>
+          </button>
+        </div>
       </FadeUp>
 
       {/* Tournaments */}
@@ -991,6 +1014,11 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
       </FadeUp>
     </>
   )
+
+  // Web users who have already used their trial — show gate immediately
+  if (isWebBrowser() && isWebTrialGated()) {
+    return <MiniPayGateModal />
+  }
 
   return (
     <>
