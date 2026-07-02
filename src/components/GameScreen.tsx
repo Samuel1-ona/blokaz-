@@ -580,9 +580,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => window.removeEventListener('pu-activated', handler)
   }, [])
 
-  // Load power-up inventory whenever the wallet changes
+  // Load power-up inventory — wallet address when connected, fixed trial key for web visitors
+  const WEB_TRIAL_ADDR = 'web-trial'
   useEffect(() => {
-    if (address) loadForAddress(address)
+    if (address) {
+      loadForAddress(address)
+    } else if (isWebBrowser()) {
+      loadForAddress(WEB_TRIAL_ADDR)
+    }
   }, [address, loadForAddress])
 
   // Sync score-boost flag directly onto the mutable GameSession

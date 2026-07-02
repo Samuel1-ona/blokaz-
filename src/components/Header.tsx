@@ -5,7 +5,7 @@ import { useOwner, useUsername } from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
 import ThemeToggle from './ThemeToggle'
-import { IS_MINIPAY } from '../utils/miniPay'
+import { IS_MINIPAY, isWebBrowser } from '../utils/miniPay'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 import LegalModal, { type LegalModalType } from './LegalModal'
 import FAQSheet from './FAQSheet'
@@ -834,7 +834,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <HeaderDivider />
 
-            {IS_MINIPAY ? null : (
+            {(IS_MINIPAY || isWebBrowser()) ? null : (
               <ConnectButton.Custom>
                 {({
                   account,
