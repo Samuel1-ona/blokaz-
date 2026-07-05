@@ -140,8 +140,23 @@ export function useStablecoinShop() {
 
         if (!txHash) throw new Error('Transaction hash unavailable — purchase may not have gone through')
         // Wait for the tx to be mined before refreshing so the on-chain balance
-        // has actually changed when wagmi queries it.
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // has actually changed when wagmi queries it. An on-chain revert means
+        // the player was NOT charged → no item. A receipt-polling failure means
+        // the tx was broadcast and almost certainly mined → the player paid,
+        // so the item MUST still be credited.
+        let reverted = false
+        if (publicClient) {
+          try {
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+            reverted = receipt.status === 'reverted'
+          } catch (waitErr) {
+            console.warn('Receipt polling failed after purchase tx was sent — crediting item:', waitErr)
+          }
+        }
+        if (reverted) {
+          setError('Payment failed on-chain — you were not charged')
+          return false
+        }
         refetchBalances()
         // Grant the item: revivalBundle = 3 revival credits, others = 1 use
         const qty = itemId === 'revivalBundle' ? 3 : 1
@@ -195,7 +210,21 @@ export function useStablecoinShop() {
         }
 
         if (!txHash) throw new Error('Transaction hash unavailable — purchase may not have gone through')
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // See purchase(): only an explicit on-chain revert withholds the items;
+        // a receipt-polling failure after a broadcast tx still credits them.
+        let reverted = false
+        if (publicClient) {
+          try {
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+            reverted = receipt.status === 'reverted'
+          } catch (waitErr) {
+            console.warn('Receipt polling failed after bundle tx was sent — crediting items:', waitErr)
+          }
+        }
+        if (reverted) {
+          setError('Payment failed on-chain — you were not charged')
+          return false
+        }
         refetchBalances()
         for (const { id, qty } of contents) {
           addInventory(id, qty)

@@ -14,6 +14,8 @@ export interface MoveRecord {
   rotations?: number        // 0-3 CW quarter-turns applied before placement
   bomb?: { row: number; col: number }
   revive?: true             // marks a revival point — replay calls session.revive()
+  shield?: true             // revival came from a shield — replay must clear shieldCols first
+  shieldCols?: number[]     // columns cleared by shieldRevive(), recorded for deterministic replay
   lotteryBonus?: number     // flat score bonus awarded by lottery — replay adds to session.score
   lotteryMultiplierStart?: true  // lottery ×2 multiplier activated — replay sets lotteryMultiplierMovesLeft=3
 }
@@ -41,6 +43,7 @@ export function rotatePieceShape(piece: ShapeDefinition): ShapeDefinition {
     cells: normalized,
     width: newWidth,
     height: newHeight,
+    rotations: ((piece.rotations ?? 0) + 1) % 4,
   }
 }
 
@@ -228,6 +231,7 @@ export class GameSession {
       row,
       col,
       scoreEvent,
+      ...(piece.rotations ? { rotations: piece.rotations } : {}),
     })
 
     // If all pieces placed, deal new ones

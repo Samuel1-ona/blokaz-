@@ -39,7 +39,9 @@ import { IS_MINIPAY } from '../utils/miniPay'
 import { usePowerUpStore } from '../stores/powerUpStore'
 import { isShopLotteryEnabled } from '../utils/featureFlags'
 import { useNotifications, ToastContainer } from './GameNotification'
-import { useTournamentMoveSync } from '../hooks/useMoveSync'
+import { useTournamentMoveSync, fetchTournamentServerSession } from '../hooks/useMoveSync'
+import { replayMoveHistory } from '../engine/sessionReplay'
+import type { MoveRecord } from '../engine/game'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 const GAS_THRESHOLD = 5_000_000_000_000_000n
@@ -283,7 +285,52 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           encodePacked(['bytes32', 'address'], [latestSeed, address])
         ).slice(0, 18)
       )
-      startGame(localSeed, true)
+
+      // Resuming an on-chain game after a crash/refresh: replay the saved move
+      // history so the player keeps their score instead of restarting at 0.
+      // Local snapshot first; if the device lost localStorage, fall back to the
+      // server-side tournament session backup.
+      let snapshot: { moveHistory: MoveRecord[]; scoreBoostActive?: boolean } | null = null
+      const stored = readStoredGameSession(
+        TOURNAMENT_SESSION_STORAGE_KEY,
+        address,
+        TOURNAMENT_ADDRESS
+      )
+      if (stored?.snapshot?.moveHistory?.length) {
+        snapshot = stored.snapshot as { moveHistory: MoveRecord[]; scoreBoostActive?: boolean }
+      } else if (tournamentId !== null) {
+        const server = await fetchTournamentServerSession(address, tournamentId.toString())
+        if (server?.moveHistory?.length && server.seed === localSeed.toString()) {
+          snapshot = {
+            moveHistory: server.moveHistory as MoveRecord[],
+            scoreBoostActive: server.scoreBoostActive,
+          }
+        }
+      }
+
+      if (snapshot) {
+        const restoredSession = replayMoveHistory(
+          localSeed,
+          snapshot.moveHistory,
+          !!snapshot.scoreBoostActive
+        )
+        // Restore the original moveHistory so marker records (revive, bomb)
+        // are preserved — replayMoveHistory applies them without re-recording,
+        // and dropping them would corrupt future snapshots and score validation.
+        restoredSession.moveHistory = [...snapshot.moveHistory]
+        ;(window as any).currentPieces = restoredSession.currentPieces
+        useGameStore.setState({
+          gameSession: restoredSession,
+          score: restoredSession.score,
+          comboStreak: restoredSession.comboStreak,
+          currentPieces: [...restoredSession.currentPieces],
+          isGameOver: restoredSession.isGameOver,
+          lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+          reviveCount: snapshot.moveHistory.filter((m) => m.revive).length,
+        })
+      } else {
+        startGame(localSeed, true)
+      }
       return
     }
 
@@ -397,32 +444,25 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   const handleBombTap = (row: number, col: number) => {
     const session = useGameStore.getState().gameSession
     if (!session) return
-    const pts = session.bombZone(row, col)
+    const bombEvent = session.bombZone(row, col)
     session.moveHistory.push({
       pieceIndex: -1,
       shapeId: '',
       row: 0,
       col: 0,
       bomb: { row, col },
-      scoreEvent: {
-        basePoints: pts,
-        linePoints: 0,
-        comboBonus: 0,
-        totalPoints: pts,
-        linesCleared: 0,
-        newComboStreak: session.comboStreak,
-        comboMultiplier: 1.0,
-        isMilestone: false,
-        multiLineFactor: 1.0,
-      },
+      scoreEvent: bombEvent,
     })
     consumeBomb()
-    useGameStore.setState({ score: session.score })
-    if (pts > 0) {
+    useGameStore.setState({
+      score: session.score,
+      comboStreak: bombEvent.newComboStreak,
+    })
+    if (bombEvent.totalPoints > 0) {
       animManagerRef.current.trigger('SCORE', {
         x: (canvasDims?.gridSize ?? 200) * 0.5,
         y: (canvasDims?.gridSize ?? 200) * 0.45,
-        score: pts,
+        score: bombEvent.totalPoints,
       })
       hapticNotification()
     } else {

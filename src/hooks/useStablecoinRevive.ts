@@ -133,11 +133,29 @@ export function useStablecoinRevive() {
 
         if (!txHash) throw new Error('Transaction hash unavailable — purchase may not have gone through')
         // Wait for the tx to be mined before refreshing so the on-chain balance
-        // has actually changed when wagmi queries it.
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // has actually changed when wagmi queries it. Distinguish an on-chain
+        // revert (player NOT charged → don't revive) from receipt-polling
+        // failures (tx was broadcast and almost certainly mined → the player
+        // paid, so the revive MUST still be granted).
+        let reverted = false
+        if (publicClient) {
+          try {
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+            reverted = receipt.status === 'reverted'
+          } catch (waitErr) {
+            console.warn('Receipt polling failed after revive tx was sent — granting revive:', waitErr)
+          }
+        }
+        if (reverted) {
+          setError('Payment failed on-chain — you were not charged')
+          return false
+        }
         refetchBalances()
-        // Log the confirmed purchase to the server (permanent receipt)
-        logPurchase(address, 'revivalBundle', 3, sym, txHash)
+        // Log the confirmed purchase to the server (permanent receipt).
+        // 'revive' is a log-only receipt — a single consumed revive, not an
+        // inventory credit (logging it as a 3-credit revivalBundle used to
+        // create phantom credits that the inventory sync then clobbered).
+        logPurchase(address, 'revive', 1, sym, txHash)
         reviveGame()
         return true
       } catch (err: any) {

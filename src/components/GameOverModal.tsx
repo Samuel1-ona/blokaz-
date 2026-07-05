@@ -104,7 +104,10 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const [isReviving, setIsReviving] = React.useState(false)
 
   const handleBundleRevive = () => {
-    if (isRevivingRef.current) return
+    // Never revive while a score submission is in flight — the submission
+    // marks the on-chain game SUBMITTED, so a run continued after it can
+    // never be submitted and the revive would be wasted.
+    if (isRevivingRef.current || isRegistering) return
     isRevivingRef.current = true
     setIsReviving(true)
     setCountdown(null)
@@ -126,7 +129,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   }
 
   const handleStableRevive = async () => {
-    if (isRevivingRef.current) return
+    // Same guard as handleBundleRevive: paying to continue a run whose score
+    // is being submitted would burn the payment on an unsubmittable game.
+    if (isRevivingRef.current || isRegistering) return
     isRevivingRef.current = true
     setIsReviving(true)
     setCountdown(null)
@@ -368,11 +373,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     }
   }, [isAllSuccess, storageKey, address])
 
-  // Start countdown once we have everything needed to submit (5s tournament, 10s classic)
+  // Start countdown once we have everything needed to submit. 10s in both
+  // modes — 5s was too short for a player deciding whether to pay for a
+  // revive, and an auto-submit racing that payment wastes it.
   React.useEffect(() => {
     if (!canSubmit || isRegistering || isAllSuccess) return
     if (countdown !== null) return
-    setCountdown(isTournamentMode ? 5 : 10)
+    setCountdown(10)
   }, [isTournamentMode, canSubmit, isRegistering, isAllSuccess])
 
   // Tick the countdown down each second
@@ -739,7 +746,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               {bundleCredits > 0 && !isAllSuccess && (mode === 'classic' || mode === 'tournament') && (
                 <button
                   onClick={handleBundleRevive}
-                  disabled={isReviving}
+                  disabled={isReviving || isRegistering}
                   className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
                   style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
                 >
@@ -849,6 +856,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       disabled={
                         isReviving ||
                         isStablePaying ||
+                        isRegistering ||
                         (!canAfford(selectedToken) && !IS_MINIPAY)
                       }
                       className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
@@ -1003,7 +1011,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                         <div
                           className="h-1.5"
                           style={{
-                            width: `${(countdown / (isTournamentMode ? 5 : 10)) * 100}%`,
+                            width: `${(countdown / 10) * 100}%`,
                             background: 'var(--paper)',
                             transition: 'width 1s linear',
                           }}

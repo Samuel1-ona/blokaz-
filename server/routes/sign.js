@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createPublicClient, http } from 'viem'
+import { createPublicClient, http, keccak256, encodePacked } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { celo } from 'viem/chains'
 import dotenv from 'dotenv'
@@ -40,12 +40,55 @@ const types = {
   ],
 }
 
-function validateScore(tid, gid, score, moves, seed) {
+const GAMES_ABI = [{
+  name: 'games', type: 'function', stateMutability: 'view',
+  inputs: [{ name: '', type: 'uint256' }],
+  outputs: [
+    { name: 'player', type: 'address' },
+    { name: 'tournamentId', type: 'uint256' },
+    { name: 'seedHash', type: 'bytes32' },
+    { name: 'score', type: 'uint32' },
+    { name: 'startedAt', type: 'uint64' },
+    { name: 'submittedAt', type: 'uint64' },
+    { name: 'status', type: 'uint8' },
+  ],
+}]
+
+/**
+ * Verifies the submission against the on-chain game record:
+ *   - the game belongs to the claimed player and tournament
+ *   - the submitted seed matches the seedHash committed at game start
+ *     (keccak256(seed ‖ player) — same commitment the contract stores)
+ * Returns the engine seed (localSeed) the client derived from that commitment,
+ * so the replay validator can verify the dealt pieces.
+ * Throws on RPC failure — the caller maps that to a retryable 503.
+ */
+async function verifyOnChainGame(tid, gid, seed, player) {
+  const [gamePlayer, gameTid, seedHash] = await publicClient.readContract({
+    address: TOURNAMENT_ADDRESS,
+    abi: GAMES_ABI,
+    functionName: 'games',
+    args: [BigInt(gid)],
+  })
+  if (gamePlayer.toLowerCase() !== String(player).toLowerCase()) {
+    return { error: 'Game does not belong to this player' }
+  }
+  if (gameTid !== BigInt(tid)) {
+    return { error: 'Game does not belong to this tournament' }
+  }
+  const expectedHash = keccak256(encodePacked(['bytes32', 'address'], [seed, player]))
+  if (expectedHash !== seedHash) {
+    return { error: 'Seed does not match the on-chain commitment' }
+  }
+  // Same derivation the client uses: first 8 bytes of the commitment hash
+  return { localSeed: BigInt(expectedHash.slice(0, 18)) }
+}
+
+function validateScore(tid, gid, score, moves, localSeed) {
   console.log(`Validating score for Tournament ${tid}, Game ${gid}: ${score} (${moves?.length ?? 0} moves)`)
-  if (!Array.isArray(moves)) return false
-  const valid = replayAndValidateScore(moves, score)
-  if (!valid) console.warn(`[sign] Score replay failed for tid=${tid} gid=${gid} claimed=${score}`)
-  return valid
+  const result = replayAndValidateScore(moves, Number(score), localSeed)
+  if (!result.ok) console.warn(`[sign] Score replay failed for tid=${tid} gid=${gid} claimed=${score}: ${result.reason}`)
+  return result.ok
 }
 
 router.post('/sign-start', async (req, res) => {
@@ -92,7 +135,24 @@ router.post('/sign-submit', async (req, res) => {
   try {
     const { tid, gid, score, moves, seed, player } = req.body
 
-    if (!validateScore(tid, gid, score, moves, seed)) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(String(player)) || !/^0x[0-9a-fA-F]{64}$/.test(String(seed))) {
+      return res.status(400).json({ error: 'Invalid player or seed' })
+    }
+
+    // Verify against the on-chain game before signing anything. RPC failures
+    // return 503 so the client's retry loop can try again — never sign blind.
+    let onChain
+    try {
+      onChain = await verifyOnChainGame(tid, gid, seed, player)
+    } catch (err) {
+      console.error('[sign] On-chain game verification unavailable:', err?.message ?? err)
+      return res.status(503).json({ error: 'Chain verification unavailable — please retry' })
+    }
+    if (onChain.error) {
+      return res.status(403).json({ error: onChain.error })
+    }
+
+    if (!validateScore(tid, gid, score, moves, onChain.localSeed)) {
       return res.status(403).json({ error: 'Invalid score submission' })
     }
 

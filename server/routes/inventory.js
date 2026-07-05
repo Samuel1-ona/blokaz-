@@ -1,12 +1,87 @@
 import { Router } from 'express'
+import { createPublicClient, http, parseEventLogs, erc20Abi } from 'viem'
+import { celo } from 'viem/chains'
 import { supabase } from '../db/supabase.js'
 
 const router = Router()
 
 const VALID_ITEM_IDS = new Set(['revivalBundle', 'scoreBoost', 'shield', 'bomb', 'rotatePass'])
+// Log-only receipts: recorded in purchase_log but never credit inventory
+// ('revive' = a single stablecoin revive consumed at purchase time).
+const LOG_ONLY_IDS = new Set(['revive'])
 const VALID_TOKENS = new Set(['USDC', 'USDT', 'USDm'])
 
 const BUNDLE_IDS = new Set(['revivalMegaPack', 'powerPack', 'starterPack'])
+
+// ── On-chain payment verification ─────────────────────────────────────────────
+
+const GAME_TREASURY = (process.env.GAME_TREASURY ?? '0x3E325B45F72dFCc3875f75b5933A5da183Ec4225').toLowerCase()
+
+const TOKENS = {
+  USDC: { address: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', decimals: 6 },
+  USDT: { address: '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', decimals: 6 },
+  USDm: { address: '0x765DE816845861e75A25fCA122bb6898B8B1282a', decimals: 18 },
+}
+
+// Price of each purchasable id in US cents — must stay in sync with the shop UI
+// (src/components/ShopModal.tsx) and revive cost (src/constants/contracts.ts).
+const PRICE_CENTS = {
+  revivalBundle: 10, scoreBoost: 10, shield: 10, bomb: 10, rotatePass: 10,
+  revive: 10,
+  revivalMegaPack: 25, powerPack: 20, starterPack: 35,
+}
+
+const publicClient = process.env.RPC_URL
+  ? createPublicClient({ chain: celo, transport: http(process.env.RPC_URL) })
+  : null
+
+if (!publicClient) {
+  console.warn('[inventory] RPC_URL not set — purchase receipts will NOT be verified on-chain')
+}
+
+/**
+ * Verifies that txHash is a mined, successful transfer of at least the item
+ * price in the claimed token, from the claimed address to the game treasury.
+ *
+ * Returns { ok: true } | { ok: false, retryable: boolean, error: string }.
+ * retryable=true means the receipt may simply not be indexed yet — the client
+ * queues and retries these, so a slow RPC never loses a legitimate receipt.
+ */
+async function verifyPurchaseTx(txHash, address, tokenSymbol, itemId) {
+  if (!publicClient) return { ok: true } // verification disabled (no RPC configured)
+
+  const token = TOKENS[tokenSymbol]
+  const priceCents = PRICE_CENTS[itemId]
+  const expected = (BigInt(priceCents) * 10n ** BigInt(token.decimals)) / 100n
+
+  let receipt
+  try {
+    receipt = await publicClient.getTransactionReceipt({ hash: txHash })
+  } catch (err) {
+    const notFound = err?.name === 'TransactionReceiptNotFoundError'
+    return {
+      ok: false,
+      retryable: true,
+      error: notFound ? 'Transaction not yet indexed — retry shortly' : 'Chain verification unavailable — retry shortly',
+    }
+  }
+
+  if (receipt.status !== 'success') {
+    return { ok: false, retryable: false, error: 'Transaction reverted on-chain' }
+  }
+
+  const transfers = parseEventLogs({ abi: erc20Abi, logs: receipt.logs, eventName: 'Transfer' })
+  const paid = transfers.some((log) =>
+    log.address.toLowerCase() === token.address.toLowerCase() &&
+    log.args.from.toLowerCase() === address.toLowerCase() &&
+    log.args.to.toLowerCase() === GAME_TREASURY &&
+    log.args.value >= expected
+  )
+  if (!paid) {
+    return { ok: false, retryable: false, error: 'Transaction does not pay for this item' }
+  }
+  return { ok: true }
+}
 
 // What each bundle credits to player_inventory
 const BUNDLE_CONTENTS = {
@@ -131,18 +206,21 @@ router.post('/purchase', async (req, res) => {
   const { address, itemId, quantity, tokenSymbol, txHash } = req.body
 
   if (!validateAddress(address)) return res.status(400).json({ error: 'Invalid address' })
-  if (!VALID_ITEM_IDS.has(itemId) && !BUNDLE_IDS.has(itemId)) {
+  if (!VALID_ITEM_IDS.has(itemId) && !BUNDLE_IDS.has(itemId) && !LOG_ONLY_IDS.has(itemId)) {
     return res.status(400).json({ error: 'Invalid itemId' })
   }
   if (!VALID_TOKENS.has(tokenSymbol)) return res.status(400).json({ error: 'Invalid tokenSymbol' })
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
     return res.status(400).json({ error: 'Invalid quantity' })
   }
+  if (typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    return res.status(400).json({ error: 'Invalid txHash' })
+  }
 
   const addr = address.toLowerCase()
 
   // Prevent duplicate processing of the same tx
-  if (txHash) {
+  {
     const { data: existing } = await supabase
       .from('purchase_log')
       .select('id')
@@ -153,6 +231,27 @@ router.post('/purchase', async (req, res) => {
     if (existing) {
       return res.status(409).json({ error: 'Transaction already processed' })
     }
+  }
+
+  // Verify the payment actually happened on-chain before crediting anything —
+  // a fabricated txHash must never mint free power-ups.
+  const verification = await verifyPurchaseTx(txHash, addr, tokenSymbol, itemId)
+  if (!verification.ok) {
+    console.warn(`[inventory] purchase verification failed (${itemId}, ${txHash}): ${verification.error}`)
+    return res.status(verification.retryable ? 503 : 400).json({ error: verification.error })
+  }
+
+  // ── Log-only receipt (consumed single revive): record, no inventory credit ──
+  if (LOG_ONLY_IDS.has(itemId)) {
+    const { error } = await supabase.from('purchase_log').insert({
+      address: addr, item_id: itemId, quantity,
+      token_symbol: tokenSymbol, tx_hash: txHash,
+    })
+    if (error) {
+      console.error('purchase_log revive insert error:', error)
+      return res.status(500).json({ error: 'Failed to record purchase' })
+    }
+    return res.json({ ok: true })
   }
 
   // ── Bundle purchase: credit each component item ─────────────────────────────

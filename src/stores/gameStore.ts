@@ -95,8 +95,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         // preserves momentum so the player keeps their multiplier going.
         gameSession.comboStreak = preComboStreak
 
-        // Record the shield-triggered revival so replayMoveHistory can call
-        // session.revive() at this exact position during session restore.
+        // Perform the shield revival first so we can record exactly which
+        // columns it cleared — replay (client and server-side score validation)
+        // re-clears those columns at this position in the move sequence.
+        // shieldRevive() pushes nothing to moveHistory, so recording the marker
+        // right after keeps it at the correct position.
+        const shieldCols = gameSession.shieldRevive()
         const minimalScoreEvent = {
           basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
           linesCleared: 0, newComboStreak: gameSession.comboStreak,
@@ -105,10 +109,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         gameSession.moveHistory.push({
           pieceIndex: -1, shapeId: '', row: 0, col: 0,
           revive: true,
+          shield: true,
+          shieldCols,
           scoreEvent: minimalScoreEvent,
         })
-
-        gameSession.shieldRevive()
         // @ts-ignore
         window.currentPieces = gameSession.currentPieces
         set({

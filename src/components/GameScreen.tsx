@@ -32,7 +32,6 @@ import {
 import { useAccount, useBalance } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import contractInfo from '../contract.json'
-import { GameSession, rotatePieceShape } from '../engine/game'
 import type { MoveRecord } from '../engine/game'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -65,41 +64,7 @@ const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 import { isShopLotteryEnabled } from '../utils/featureFlags'
-
-function replayMoveHistory(
-  seed: bigint,
-  history: MoveRecord[],
-  scoreBoostActive = false
-): GameSession {
-  const session = new GameSession(seed)
-  session.scoreBoostActive = scoreBoostActive
-  for (const move of history) {
-    if (move.revive) {
-      session.revive()
-      continue
-    }
-    if (move.bomb) {
-      session.bombZone(move.bomb.row, move.bomb.col)
-      continue
-    }
-    // Lottery ×2 multiplier activation — restore the counter so the next 3
-    // placePiece calls inside the engine double their score, matching the live run.
-    if (move.lotteryMultiplierStart) {
-      session.lotteryMultiplierMovesLeft = 3
-      continue
-    }
-    // Lottery flat bonus — add directly to session score, no piece placement.
-    if (move.lotteryBonus) {
-      session.score += move.lotteryBonus
-      continue
-    }
-    if (move.rotations) {
-      for (let i = 0; i < move.rotations; i++) session.rotatePiece(move.pieceIndex)
-    }
-    session.placePiece(move.pieceIndex, move.row, move.col)
-  }
-  return session
-}
+import { replayMoveHistory } from '../engine/sessionReplay'
 
 interface GameScreenProps {
   onOpenLeaderboard?: () => void

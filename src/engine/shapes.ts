@@ -7,6 +7,7 @@ export interface ShapeDefinition {
   cellCount: number // total filled cells
   spawnWeight: number // probability weight for RNG selection
   colorId: number // ID in COLOR_PALETTE (1-9)
+  rotations?: number // CW quarter-turns applied via Rotate Pass (0-3); recorded into MoveRecord for replay
 }
 
 export const SHAPES: ShapeDefinition[] = [

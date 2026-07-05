@@ -1,3 +1,5 @@
+import type { MoveRecord } from '../engine/game'
+
 export const CLASSIC_SESSION_STORAGE_KEY = 'blokaz_classic_session'
 export const TOURNAMENT_SESSION_STORAGE_KEY = 'blokaz_tournament_session'
 
@@ -8,6 +10,9 @@ export interface StoredGameSession {
   gameId: string | null
   contractAddress: `0x${string}`
   tournamentId?: string | null
+  // In-progress run backup, written on score change / revive / app-hide and
+  // replayed by replayMoveHistory() to restore the session after a crash.
+  snapshot?: { moveHistory: MoveRecord[]; scoreBoostActive?: boolean }
 }
 
 export function readStoredGameSession(

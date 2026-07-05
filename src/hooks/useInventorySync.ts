@@ -151,7 +151,9 @@ async function flushPendingPurchases(): Promise<void> {
  */
 export async function logPurchase(
   address: string,
-  itemId: PowerUpId | 'revivalBundle',
+  // 'revive' is a log-only receipt for a consumed single revive; bundle ids
+  // (e.g. 'starterPack') pass through as plain strings.
+  itemId: PowerUpId | 'revivalBundle' | 'revive' | string,
   quantity: number,
   tokenSymbol: string,
   txHash: string,
