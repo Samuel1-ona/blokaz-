@@ -25,6 +25,7 @@ import {
   useStartTournamentGame,
   generateGameSeed,
   useActiveTournamentGame,
+  useTournament,
 } from '../hooks/useBlokzGame'
 import { requestStartSignature } from '../api/signer'
 import { useAccount, useBalance, usePublicClient } from 'wagmi'
@@ -288,6 +289,28 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     return () => clearTimeout(t)
   }, [readyCountdown])
   const isGettingReady = readyCountdown !== null && readyCountdown > 0
+
+  // ── Late-start guard ─────────────────────────────────────────────────────────
+  // A fresh run started in the final 3 minutes can never be submitted (the
+  // contract rejects submissions after endTime) — block it before any gas or
+  // effort is spent. Continuing an existing run stays allowed.
+  const { tournament: tournamentData } = useTournament(tournamentId ?? 0n)
+  const [nowSec, setNowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)))
+  useEffect(() => {
+    if (gameSession) return // no ticking re-renders during gameplay
+    const t = setInterval(() => setNowSec(BigInt(Math.floor(Date.now() / 1000))), 1000)
+    return () => clearInterval(t)
+  }, [!!gameSession])
+  const tournamentEndTime =
+    tournamentData && (tournamentData as readonly unknown[])[0] !== '0x0000000000000000000000000000000000000000'
+      ? ((tournamentData as readonly unknown[])[3] as bigint)
+      : null
+  const tournamentOver = tournamentEndTime !== null && nowSec >= tournamentEndTime
+  const tooLateToStart =
+    !showResume &&
+    !gameSession &&
+    tournamentEndTime !== null &&
+    (tournamentOver || tournamentEndTime - nowSec < 180n)
 
   // ── Redirect if no tournament selected (only after hydration) ───────────────
   useEffect(() => {
@@ -1075,7 +1098,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         <button
           onClick={handleStartGame}
           disabled={
-            isPending || isConfirming || isSyncingContract || sessionConflict || isGettingReady
+            isPending || isConfirming || isSyncingContract || sessionConflict ||
+            isGettingReady || tooLateToStart
           }
           className="brutal-btn w-full border-4 border-ink bg-accent-lime py-4 font-display text-sm uppercase tracking-[0.14em] disabled:opacity-50"
           style={{ boxShadow: '6px 6px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
@@ -1087,6 +1111,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             </div>
           ) : sessionConflict ? (
             'SESSION CONFLICT'
+          ) : tooLateToStart ? (
+            tournamentOver ? 'TOURNAMENT ENDED' : 'ENDS TOO SOON TO START'
           ) : isPending || isConfirming ? (
             'PREPARING...'
           ) : isGettingReady ? (

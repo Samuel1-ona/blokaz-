@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createPublicClient, http, parseEventLogs, erc20Abi } from 'viem'
+import { createPublicClient, http, fallback, parseEventLogs, erc20Abi } from 'viem'
 import { celo } from 'viem/chains'
 import { supabase } from '../db/supabase.js'
 
@@ -31,8 +31,18 @@ const PRICE_CENTS = {
   revivalMegaPack: 25, powerPack: 20, starterPack: 35,
 }
 
+// Backup public endpoints so a flaky primary RPC can't reject legitimate
+// purchase receipts (retryable 503s would still recover, but slower).
+const BACKUP_RPCS = ['https://forno.celo.org', 'https://1rpc.io/celo']
+
 const publicClient = process.env.RPC_URL
-  ? createPublicClient({ chain: celo, transport: http(process.env.RPC_URL) })
+  ? createPublicClient({
+      chain: celo,
+      transport: fallback([
+        http(process.env.RPC_URL),
+        ...BACKUP_RPCS.filter((u) => u !== process.env.RPC_URL).map((u) => http(u)),
+      ]),
+    })
   : null
 
 if (!publicClient) {

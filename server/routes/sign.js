@@ -1,10 +1,14 @@
 import { Router } from 'express'
-import { createPublicClient, http, keccak256, encodePacked } from 'viem'
+import { createPublicClient, http, fallback, keccak256, encodePacked } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { celo } from 'viem/chains'
 import dotenv from 'dotenv'
 import { replayAndValidateScore } from '../engine/scoreReplay.js'
 dotenv.config()
+
+// Backup public endpoints so a flaky primary RPC can't fail the on-chain game
+// verification and block legitimate score submissions with 503s.
+const BACKUP_RPCS = ['https://forno.celo.org', 'https://1rpc.io/celo']
 
 const router = Router()
 
@@ -14,7 +18,13 @@ const CHAIN_ID = Number(process.env.CHAIN_ID)
 const RPC_URL = process.env.RPC_URL
 
 const account = privateKeyToAccount(SIGNER_PRIVATE_KEY)
-const publicClient = createPublicClient({ chain: celo, transport: http(RPC_URL) })
+const publicClient = createPublicClient({
+  chain: celo,
+  transport: fallback([
+    http(RPC_URL),
+    ...BACKUP_RPCS.filter((u) => u !== RPC_URL).map((u) => http(u)),
+  ]),
+})
 
 const domain = {
   name: 'BlokzTournament',

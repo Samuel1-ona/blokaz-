@@ -247,6 +247,17 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     onPlayAgain()
   }
 
+  // Submit signature prefetched as soon as the modal has everything it needs,
+  // so the submit itself is a single wallet action with no signer round-trip
+  // on the critical path — and signer problems surface early, while the
+  // auto-retry below still has time to recover them.
+  const prefetchedSubmitSigRef = React.useRef<{
+    gid: string
+    score: number
+    signature: `0x${string}`
+    deadline: bigint
+  } | null>(null)
+
   const handleSubmit = async () => {
     if (!gameSession || !recoveredSeed || !effectiveGameId) return
     if (isRegistering || isAllSuccess) return
@@ -258,14 +269,23 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     if (isTournamentMode) {
       setSignerError(null)
       try {
-        const { signature, deadline } = await requestSubmitSignature(
-          tournamentId!,
-          effectiveGameId!,
-          gameSession.score,
-          gameSession.moveHistory,
-          recoveredSeed,
-          address!
-        )
+        const nowSec = BigInt(Math.floor(Date.now() / 1000))
+        const prefetch = prefetchedSubmitSigRef.current
+        const usable =
+          prefetch &&
+          prefetch.gid === effectiveGameId.toString() &&
+          prefetch.score === gameSession.score &&
+          prefetch.deadline > nowSec + 60n
+        const { signature, deadline } = usable
+          ? prefetch
+          : await requestSubmitSignature(
+              tournamentId!,
+              effectiveGameId!,
+              gameSession.score,
+              gameSession.moveHistory,
+              recoveredSeed,
+              address!
+            )
         submitTournamentScore(
           tournamentId!,
           effectiveGameId!,
@@ -451,6 +471,37 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       })()
     }
   }, [isAllSuccess, storageKey, address])
+
+  // Fire the signature prefetch once submission becomes possible
+  React.useEffect(() => {
+    if (!isTournamentMode || tournamentId === null) return
+    if (!gameSession || !recoveredSeed || !effectiveGameId || !address) return
+    if (isAllSuccess || prefetchedSubmitSigRef.current?.gid === effectiveGameId.toString()) return
+    let cancelled = false
+    requestSubmitSignature(
+      tournamentId,
+      effectiveGameId,
+      gameSession.score,
+      gameSession.moveHistory,
+      recoveredSeed,
+      address
+    )
+      .then((sig) => {
+        if (cancelled) return
+        prefetchedSubmitSigRef.current = {
+          gid: effectiveGameId.toString(),
+          score: gameSession.score,
+          ...sig,
+        }
+      })
+      .catch(() => {
+        // silent — handleSubmit falls back to an on-demand fetch
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTournamentMode, tournamentId, recoveredSeed, effectiveGameId, address, isAllSuccess])
 
   // Start countdown once we have everything needed to submit. 10s in both
   // modes — 5s was too short for a player deciding whether to pay for a

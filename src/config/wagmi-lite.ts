@@ -6,6 +6,12 @@ import { celo } from 'wagmi/chains'
 const rpcUrl = import.meta.env.VITE_RPC as string | undefined
 const CELO_RPC = rpcUrl || 'https://forno.celo.org'
 
+// Public Celo endpoints appended as extra fallback slots — a single flaky RPC
+// must not be able to fail score submissions or receipt polling.
+const BACKUP_RPCS = ['https://forno.celo.org', 'https://1rpc.io/celo'].filter(
+  (u) => u !== CELO_RPC
+)
+
 const celoTransport = fallback([
   custom({
     async request({ method, params }: { method: string; params?: unknown[] }) {
@@ -15,6 +21,7 @@ const celoTransport = fallback([
     },
   }),
   http(CELO_RPC),
+  ...BACKUP_RPCS.map((u) => http(u)),
 ])
 
 export const injectedConnector = injected({

@@ -193,6 +193,10 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   }
   const secondsToEnd = endTime - now
   const endingSoon = isStarted && !isEnded && secondsToEnd < 600n
+  // Starting a fresh run in the final 3 minutes is a score that can never be
+  // submitted (the contract rejects submissions after endTime) — block it.
+  // Continuing an existing run stays allowed so it can still be submitted.
+  const tooLateToStart = isStarted && !isEnded && secondsToEnd < 180n && !resumableRun
 
   const rowBg = ROW_COLORS[index % 4]
   const tagStyle = TAG_STYLES[index % 4]
@@ -363,6 +367,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
             <>
               <button
                 onClick={() => onStartMatch(id)}
+                disabled={tooLateToStart}
                 className="brutal-btn font-display"
                 style={{
                   flex: 2,
@@ -373,11 +378,14 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   fontSize: 12,
                   letterSpacing: '0.1em',
                   boxShadow: '4px 4px 0 var(--shadow)',
+                  opacity: tooLateToStart ? 0.5 : 1,
                 }}
               >
-                {resumableRun
-                  ? `CONTINUE — ${resumableRun.score.toLocaleString()} PTS`
-                  : 'START MATCH'}
+                {tooLateToStart
+                  ? 'ENDS TOO SOON'
+                  : resumableRun
+                    ? `CONTINUE — ${resumableRun.score.toLocaleString()} PTS`
+                    : 'START MATCH'}
               </button>
               <button
                 onClick={() => onViewRankings(id, prizePool)}
