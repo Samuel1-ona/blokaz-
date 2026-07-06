@@ -261,6 +261,34 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   }, [address, tournamentId, isSyncingContract])
   const showResume = !!resumableRun && !sessionConflict
 
+  // ── First-entry ready timer ──────────────────────────────────────────────────
+  // The first time a player opens a tournament's match screen, hold COMMENCE
+  // behind a short countdown: it sets expectations ("get ready") and gives the
+  // join tx time to propagate so an eager tap can't hit NotInTournament.
+  const [readyCountdown, setReadyCountdown] = useState<number | null>(null)
+  useEffect(() => {
+    if (isSyncingContract || tournamentId === null || !address) return
+    if (gameSession || showResume) return
+    const key = `blokaz:tready:${address.toLowerCase()}:${tournamentId.toString()}`
+    try {
+      if (localStorage.getItem(key)) return
+      localStorage.setItem(key, '1')
+    } catch {
+      return
+    }
+    setReadyCountdown(10)
+  }, [isSyncingContract, tournamentId, address, !!gameSession, showResume])
+
+  useEffect(() => {
+    if (readyCountdown === null || readyCountdown <= 0) return
+    const t = setTimeout(
+      () => setReadyCountdown((c) => (c !== null && c > 0 ? c - 1 : c)),
+      1000
+    )
+    return () => clearTimeout(t)
+  }, [readyCountdown])
+  const isGettingReady = readyCountdown !== null && readyCountdown > 0
+
   // ── Redirect if no tournament selected (only after hydration) ───────────────
   useEffect(() => {
     if (!isSyncingContract && tournamentId === null) {
@@ -1046,7 +1074,9 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
 
         <button
           onClick={handleStartGame}
-          disabled={isPending || isConfirming || isSyncingContract || sessionConflict}
+          disabled={
+            isPending || isConfirming || isSyncingContract || sessionConflict || isGettingReady
+          }
           className="brutal-btn w-full border-4 border-ink bg-accent-lime py-4 font-display text-sm uppercase tracking-[0.14em] disabled:opacity-50"
           style={{ boxShadow: '6px 6px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
         >
@@ -1059,6 +1089,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             'SESSION CONFLICT'
           ) : isPending || isConfirming ? (
             'PREPARING...'
+          ) : isGettingReady ? (
+            `GET READY — ${readyCountdown}S`
           ) : showResume ? (
             'CONTINUE GAME'
           ) : (

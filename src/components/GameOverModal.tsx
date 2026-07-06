@@ -397,11 +397,18 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     /exceeds.*(balance|allowance)/i.test(rawErrorMsg) ||
     (!!hasError && totalStableUsd < 0.09)
 
+  const isUserRejectedError =
+    /user rejected/i.test(rawErrorMsg) || /denied/i.test(rawErrorMsg)
+  const isTournamentEndedError =
+    /tournamentalreadyended|already ended/i.test(rawErrorMsg)
+
   // Parse raw wagmi/viem errors into a player-friendly message
   const friendlyError = (() => {
     if (!hasError) return null
     if (isInsufficientFunds) return null  // handled by its own UI block below
-    if (/user rejected/i.test(rawErrorMsg) || /denied/i.test(rawErrorMsg))
+    if (isTournamentEndedError)
+      return 'This tournament has ended — scores can no longer be submitted for it.'
+    if (isUserRejectedError)
       return 'Transaction cancelled — tap retry to try again.'
     if (/nonce/i.test(rawErrorMsg))
       return 'Transaction conflict — please retry.'
@@ -409,6 +416,27 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       return 'Network issue — check your connection and retry.'
     return 'Something went wrong — tap retry to try again.'
   })()
+
+  // ── Automatic submission retries ─────────────────────────────────────────────
+  // Transient failures (RPC hiccups, nonce conflicts, signer-server cold
+  // starts) retry themselves with backoff so the score lands without the
+  // player having to babysit the retry button. Deliberate cancellations,
+  // insufficient funds, and ended tournaments are never auto-retried.
+  const autoRetryCountRef = React.useRef(0)
+  React.useEffect(() => {
+    if (!hasError && !signerError) return
+    if (isAllSuccess || isRegistering) return
+    if (hasError && (isUserRejectedError || isInsufficientFunds || isTournamentEndedError)) return
+    if (autoRetryCountRef.current >= 3) return
+    autoRetryCountRef.current++
+    const delay = 4000 * autoRetryCountRef.current
+    const t = setTimeout(() => {
+      if (!canSubmit || isRegistering) return
+      handleSubmit()
+    }, delay)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasError, signerError])
 
   React.useEffect(() => {
     if (isAllSuccess && address) {
