@@ -33,10 +33,12 @@ import { keccak256, encodePacked } from 'viem'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import {
-  TOURNAMENT_SESSION_STORAGE_KEY,
-  readStoredGameSession,
-  writeStoredGameSession,
+  tournamentSessionKey,
+  readTournamentSession,
   readResumableTournamentRun,
+  readLastTournamentId,
+  rememberLastTournament,
+  writeStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { usePowerUpStore } from '../stores/powerUpStore'
@@ -48,6 +50,25 @@ import type { MoveRecord } from '../engine/game'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 const GAS_THRESHOLD = 5_000_000_000_000_000n
+
+// Write the live session's snapshot into ITS tournament's storage slot.
+// Reads the tournament id from the store at call time so effects and event
+// handlers can't capture a stale closure value.
+function persistTournamentSnapshot() {
+  const { gameSession, tournamentId } = useGameStore.getState()
+  if (!gameSession?.moveHistory.length || tournamentId === null) return
+  const key = tournamentSessionKey(tournamentId)
+  const raw = localStorage.getItem(key)
+  if (!raw) return
+  try {
+    const entry = JSON.parse(raw)
+    entry.snapshot = {
+      moveHistory: gameSession.moveHistory,
+      scoreBoostActive: gameSession.scoreBoostActive,
+    }
+    localStorage.setItem(key, JSON.stringify(entry))
+  } catch {}
+}
 
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(() =>
@@ -111,11 +132,10 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   }, [hasNoGas])
   const showNoGasModal = hasNoGas && !noGasDismissed
 
-  const {
-    gameId: onChainActiveGameId,
-    isLoading: isLoadingActiveGame,
-    refetch: refetchActiveGame,
-  } = useActiveTournamentGame(address)
+  // Only the refetch is used: the contract's activeGame mapping is one-per-
+  // player, so its value is only trusted after a seed-commitment check in the
+  // registration reconciliation below (it may point at another tournament).
+  const { refetch: refetchActiveGame } = useActiveTournamentGame(address)
   const {
     startTournamentGame: contractStartTournamentGame,
     isPending,
@@ -207,47 +227,41 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     }
   }, [gameSession, tournamentId, isConnected, address, isSyncingContract])
 
-  // ── Hydration & Reconciliation ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!isConnected || !address || isLoadingActiveGame) return
-
-    const storedSession = readStoredGameSession(
-      TOURNAMENT_SESSION_STORAGE_KEY,
-      address,
-      TOURNAMENT_ADDRESS
-    )
-    const contractActiveId = (onChainActiveGameId as bigint) || 0n
-
-    if (contractActiveId !== 0n) {
-      if (
-        storedSession &&
-        (storedSession.gameId === contractActiveId.toString() ||
-          !storedSession.gameId)
-      ) {
-        setOnChainData(contractActiveId, storedSession.seed as `0x${string}`)
-        setSessionConflict(false)
-      } else {
-        setSessionConflict(true)
-      }
-    } else {
-      if (storedSession) useGameStore.setState({ onChainGameId: 0n, onChainSeed: null, onChainStatus: 'none' })
-      setSessionConflict(false)
-    }
-
-    setIsSyncingContract(false)
-  }, [isConnected, address, isLoadingActiveGame, onChainActiveGameId, setOnChainData])
-
-  // ── Restore tournamentId from storage ───────────────────────────────────────
+  // ── Hydration ────────────────────────────────────────────────────────────────
+  // Each tournament has its OWN storage slot — hydrate this run's on-chain
+  // identity (seed + game id) from it. Deliberately NOT from the contract's
+  // activeGame mapping: that is one-per-player, so with two concurrent
+  // tournaments it points at whichever game started last and would corrupt
+  // the other tournament's state. When the entry has a seed but no confirmed
+  // game id, the registration reconciliation below verifies it against the
+  // chain (seed commitment checked) once a session is live.
   useEffect(() => {
     if (!isConnected || !address) return
-    const storedSession = readStoredGameSession(
-      TOURNAMENT_SESSION_STORAGE_KEY,
-      address,
-      TOURNAMENT_ADDRESS
-    )
-    if (storedSession?.tournamentId && !tournamentId) {
-      setTournamentId(BigInt(storedSession.tournamentId))
+    if (tournamentId === null) {
+      // No tournament selected and none restorable — let the redirect fire.
+      setIsSyncingContract(false)
+      return
     }
+    const entry = readTournamentSession(tournamentId, address, TOURNAMENT_ADDRESS)
+    if (entry?.gameId) {
+      setOnChainData(BigInt(entry.gameId), entry.seed, 'registered')
+    } else if (entry?.seed) {
+      setOnChainData(0n, entry.seed, 'pending')
+    } else {
+      useGameStore.setState({ onChainGameId: 0n, onChainSeed: null, onChainStatus: 'none' })
+    }
+    setIsSyncingContract(false)
+  }, [isConnected, address, tournamentId, setOnChainData])
+
+  // ── Restore tournamentId from storage ───────────────────────────────────────
+  // After a refresh mid-game the store is empty; the last-played pointer says
+  // which tournament's slot to rehydrate from.
+  useEffect(() => {
+    if (!isConnected || !address || tournamentId !== null) return
+    const lastTid = readLastTournamentId()
+    if (!lastTid) return
+    const entry = readTournamentSession(lastTid, address, TOURNAMENT_ADDRESS)
+    if (entry) setTournamentId(BigInt(lastTid))
   }, [isConnected, address, setTournamentId, tournamentId])
 
   // ── Resumable run detection ──────────────────────────────────────────────────
@@ -257,8 +271,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   // unregistered run continues, and the game-over recovery registers it later.
   const resumableRun = React.useMemo(() => {
     if (!address || tournamentId === null || isSyncingContract) return null
-    const run = readResumableTournamentRun(address, TOURNAMENT_ADDRESS)
-    return run && run.tournamentId === tournamentId.toString() ? run : null
+    return readResumableTournamentRun(tournamentId, address, TOURNAMENT_ADDRESS)
   }, [address, tournamentId, isSyncingContract])
   const showResume = !!resumableRun && !sessionConflict
 
@@ -339,7 +352,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
 
   // ── Handle Start ─────────────────────────────────────────────────────────────
   const handleStartGame = async () => {
-    if (!isConnected || !address) return
+    if (!isConnected || !address || tournamentId === null) return
+    rememberLastTournament(tournamentId)
 
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
@@ -349,13 +363,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     // which is all a continue needs. If the run was never registered on-chain
     // (silent start-tx failure), the game-over screen's late-registration
     // recovery re-commits the same seed and the score still submits.
-    const stored = readStoredGameSession(
-      TOURNAMENT_SESSION_STORAGE_KEY,
-      address,
-      TOURNAMENT_ADDRESS
-    )
-    const storedMatches =
-      !!stored?.seed && stored.tournamentId === tournamentId?.toString()
+    const stored = readTournamentSession(tournamentId, address, TOURNAMENT_ADDRESS)
+    const storedMatches = !!stored?.seed
     const registered = !!latestSeed && !!latestGameId && latestGameId !== 0n
     const resumeSeed = (latestSeed ?? (storedMatches ? stored!.seed : null)) as
       | `0x${string}`
@@ -395,11 +404,11 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         // Persist the winning snapshot locally so per-move saves have a base
         // entry to update — without this, a server-restored run on a fresh
         // device would never write local backups for the rest of the game.
-        writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+        writeStoredGameSession(tournamentSessionKey(tournamentId), {
           address,
           seed: resumeSeed,
           gameId: registered ? latestGameId!.toString() : (stored?.gameId ?? null),
-          tournamentId: tournamentId?.toString(),
+          tournamentId: tournamentId.toString(),
           contractAddress: TOURNAMENT_ADDRESS,
           snapshot,
         })
@@ -446,15 +455,15 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       startGame(localSeed)
       setCurrentSeed({ seed, hash })
       setOnChainData(0n, seed, 'pending')
-      writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+      writeStoredGameSession(tournamentSessionKey(tournamentId), {
         address,
         seed,
         hash,
         gameId: null,
-        tournamentId: tournamentId?.toString(),
+        tournamentId: tournamentId.toString(),
         contractAddress: TOURNAMENT_ADDRESS,
       })
-      contractStartTournamentGame(tournamentId!, hash, nonce, deadline, signature)
+      contractStartTournamentGame(tournamentId, hash, nonce, deadline, signature)
       return
     }
 
@@ -466,23 +475,23 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     setCurrentSeed({ seed, hash })
     setOnChainData(0n, seed, 'pending')
 
-    writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+    writeStoredGameSession(tournamentSessionKey(tournamentId), {
       address,
       seed,
       hash,
       gameId: null,
-      tournamentId: tournamentId?.toString(),
+      tournamentId: tournamentId.toString(),
       contractAddress: TOURNAMENT_ADDRESS,
     })
 
     setSignerError(null)
     try {
       const { signature, nonce, deadline } = await requestStartSignature(
-        tournamentId!,
+        tournamentId,
         hash,
         address
       )
-      contractStartTournamentGame(tournamentId!, hash, nonce, deadline, signature)
+      contractStartTournamentGame(tournamentId, hash, nonce, deadline, signature)
     } catch (err) {
       console.error('Failed to get start signature:', err)
       hapticError()
@@ -498,44 +507,20 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   const reviveCount = useGameStore((s) => s.reviveCount)
   useEffect(() => {
     if (!score) return
-    const session = useGameStore.getState().gameSession
-    if (!session || !session.moveHistory.length) return
-    const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
-    if (!raw) return
-    try {
-      const entry = JSON.parse(raw)
-      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
-      localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
-    } catch {}
+    persistTournamentSnapshot()
   }, [score])
 
   // Persist after every revival so the revive marker is durable
   useEffect(() => {
     if (reviveCount === 0) return
-    const session = useGameStore.getState().gameSession
-    if (!session?.moveHistory.length) return
-    const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
-    if (!raw) return
-    try {
-      const entry = JSON.parse(raw)
-      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
-      localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
-    } catch {}
+    persistTournamentSnapshot()
   }, [reviveCount])
 
   // Persist when app is hidden (MiniPay pause / system multitask)
   useEffect(() => {
     const saveOnHide = () => {
       if (!document.hidden) return
-      const session = useGameStore.getState().gameSession
-      if (!session?.moveHistory.length) return
-      const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
-      if (!raw) return
-      try {
-        const entry = JSON.parse(raw)
-        entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
-        localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
-      } catch {}
+      persistTournamentSnapshot()
     }
     document.addEventListener('visibilitychange', saveOnHide)
     return () => document.removeEventListener('visibilitychange', saveOnHide)
@@ -621,13 +606,17 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         )
         if (cancelled || !seedHash || seedHash !== expected) return
         setOnChainData(gid, seed, 'registered')
-        const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
-        if (raw) {
-          try {
-            const entry = JSON.parse(raw)
-            entry.gameId = gid.toString()
-            localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
-          } catch {}
+        const tid = useGameStore.getState().tournamentId
+        if (tid !== null) {
+          const key = tournamentSessionKey(tid)
+          const raw = localStorage.getItem(key)
+          if (raw) {
+            try {
+              const entry = JSON.parse(raw)
+              entry.gameId = gid.toString()
+              localStorage.setItem(key, JSON.stringify(entry))
+            } catch {}
+          }
         }
         clearInterval(timer)
       } catch {}
@@ -646,15 +635,21 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       const timer = setInterval(async () => {
         const res = await refetchActiveGame()
         const newGameId = res.data as bigint
-        if (newGameId && newGameId !== 0n) {
+        if (newGameId && newGameId !== 0n && tournamentId !== null) {
           setOnChainData(newGameId, currentSeed.seed, 'registered')
-          writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+          // Preserve any snapshot already written for this run — overwriting
+          // the entry without it would discard the crash backup.
+          const existing = readTournamentSession(tournamentId, address, TOURNAMENT_ADDRESS)
+          writeStoredGameSession(tournamentSessionKey(tournamentId), {
             address,
             seed: currentSeed.seed,
             hash: currentSeed.hash,
             gameId: newGameId.toString(),
-            tournamentId: tournamentId?.toString(),
+            tournamentId: tournamentId.toString(),
             contractAddress: TOURNAMENT_ADDRESS,
+            ...(existing?.seed === currentSeed.seed && existing.snapshot
+              ? { snapshot: existing.snapshot }
+              : {}),
           })
           clearInterval(timer)
         }
@@ -767,21 +762,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             score: result.scoreEvent.totalPoints,
           })
         }
-        // Persist move history
-        const updatedSession = useGameStore.getState().gameSession
-        if (updatedSession) {
-          const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
-          if (raw) {
-            try {
-              const entry = JSON.parse(raw)
-              entry.snapshot = { moveHistory: updatedSession.moveHistory }
-              localStorage.setItem(
-                TOURNAMENT_SESSION_STORAGE_KEY,
-                JSON.stringify(entry)
-              )
-            } catch {}
-          }
-        }
+        // Persist move history into this tournament's own slot
+        persistTournamentSnapshot()
       },
       (shape: ShapeDefinition, row: number, col: number) => {
         if (!shape) return false

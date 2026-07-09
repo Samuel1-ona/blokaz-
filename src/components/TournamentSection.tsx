@@ -94,10 +94,10 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
 
   // In-progress run saved on this device for THIS tournament — lets the
   // player resume with their score intact instead of a generic "start".
-  const resumableRun = useMemo(() => {
-    const run = readResumableTournamentRun(address, TOURNAMENT_ADDRESS)
-    return run && run.tournamentId === id.toString() ? run : null
-  }, [address, id])
+  const resumableRun = useMemo(
+    () => readResumableTournamentRun(id, address, TOURNAMENT_ADDRESS),
+    [address, id]
+  )
 
   // After approve confirms, immediately allow the join button to show.
   // We don't auto-fire joinTournament — wallets require a direct user gesture

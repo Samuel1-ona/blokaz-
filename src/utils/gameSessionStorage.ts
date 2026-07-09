@@ -55,6 +55,55 @@ export function clearStoredGameSession(storageKey: string) {
   localStorage.removeItem(storageKey)
 }
 
+// ── Per-tournament session storage ────────────────────────────────────────────
+// Each tournament gets its own storage slot so playing in one tournament can
+// never overwrite another's in-progress run. The unscoped legacy key is
+// migrated on first read.
+
+export const tournamentSessionKey = (tournamentId: string | bigint) =>
+  `${TOURNAMENT_SESSION_STORAGE_KEY}:${tournamentId.toString()}`
+
+const LAST_TOURNAMENT_KEY = 'blokaz_tournament_last_tid'
+
+export function rememberLastTournament(tournamentId: string | bigint) {
+  try {
+    localStorage.setItem(LAST_TOURNAMENT_KEY, tournamentId.toString())
+  } catch {}
+}
+
+export function readLastTournamentId(): string | null {
+  try {
+    return localStorage.getItem(LAST_TOURNAMENT_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function readTournamentSession(
+  tournamentId: string | bigint,
+  address?: `0x${string}`,
+  contractAddress?: `0x${string}`
+): StoredGameSession | null {
+  const key = tournamentSessionKey(tournamentId)
+  const entry = readStoredGameSession(key, address, contractAddress)
+  if (entry) return entry
+  // Legacy single-slot entry (pre per-tournament storage): claim and migrate
+  // it when it belongs to this tournament.
+  const legacy = readStoredGameSession(
+    TOURNAMENT_SESSION_STORAGE_KEY,
+    address,
+    contractAddress
+  )
+  if (legacy?.tournamentId === tournamentId.toString()) {
+    try {
+      localStorage.setItem(key, JSON.stringify(legacy))
+      localStorage.removeItem(TOURNAMENT_SESSION_STORAGE_KEY)
+    } catch {}
+    return legacy
+  }
+  return null
+}
+
 export interface ResumableTournamentRun {
   tournamentId: string
   score: number
@@ -62,22 +111,19 @@ export interface ResumableTournamentRun {
 }
 
 /**
- * Returns the in-progress tournament run saved on this device, or null when
- * there is nothing to resume. Score is derived from the recorded move totals —
- * the same invariant the engine maintains (score ≡ Σ scoreEvent.totalPoints).
+ * Returns the in-progress run saved on this device for a specific tournament,
+ * or null when there is nothing to resume. Score is derived from the recorded
+ * move totals — the same invariant the engine maintains.
  */
 export function readResumableTournamentRun(
+  tournamentId: string | bigint,
   address?: `0x${string}`,
   contractAddress?: `0x${string}`
 ): ResumableTournamentRun | null {
-  const stored = readStoredGameSession(
-    TOURNAMENT_SESSION_STORAGE_KEY,
-    address,
-    contractAddress
-  )
-  if (!stored?.tournamentId || !stored.snapshot?.moveHistory?.length) return null
+  const stored = readTournamentSession(tournamentId, address, contractAddress)
+  if (!stored?.snapshot?.moveHistory?.length) return null
   return {
-    tournamentId: stored.tournamentId,
+    tournamentId: tournamentId.toString(),
     score: stored.snapshot.moveHistory.reduce(
       (sum, m) => sum + (m.scoreEvent?.totalPoints ?? 0),
       0

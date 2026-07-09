@@ -25,7 +25,8 @@ import { markSessionComplete, markTournamentSessionComplete } from '../hooks/use
 import { keccak256, encodePacked } from 'viem'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
-  TOURNAMENT_SESSION_STORAGE_KEY,
+  tournamentSessionKey,
+  readTournamentSession,
   clearStoredGameSession,
   readStoredGameSession,
 } from '../utils/gameSessionStorage'
@@ -168,13 +169,27 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     isSuccess: isToursSuccess,
     error: toursError,
   } = useSubmitTournamentScore()
+  // Tournament sessions are stored per-tournament so concurrent tournaments
+  // can't clobber each other.
   const storageKey =
-    mode === 'tournament'
-      ? TOURNAMENT_SESSION_STORAGE_KEY
+    mode === 'tournament' && tournamentId !== null
+      ? tournamentSessionKey(tournamentId)
       : CLASSIC_SESSION_STORAGE_KEY
   const isTournamentMode = mode === 'tournament' && tournamentId !== null
 
-  const effectiveGameId = onChainGameId || activeGameId
+  // The contract's activeGame mapping is one-per-player: with two concurrent
+  // tournaments it points at whichever game started last, which may belong to
+  // the OTHER tournament. For tournament submissions, fall back to this
+  // tournament's stored game ID instead; the global mapping is classic-only.
+  const storedTournamentGameId = useMemo(() => {
+    if (!isTournamentMode || !address) return null
+    const gid = readTournamentSession(tournamentId!, address, TOURNAMENT_ADDRESS)?.gameId
+    return gid ? BigInt(gid) : null
+  }, [isTournamentMode, tournamentId, address])
+  const effectiveGameId =
+    mode === 'tournament'
+      ? onChainGameId || storedTournamentGameId || undefined
+      : onChainGameId || activeGameId
 
   // Classic games live in GAME_ADDRESS; tournament games in TOURNAMENT_ADDRESS.
   // Both hooks are always called (Rules of Hooks), but only the relevant one is enabled.
@@ -383,8 +398,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     }
   }
 
-  // Poll the contract until the re-registered tournament game ID appears —
-  // effectiveGameId then unlocks the submit button (and its auto-countdown).
+  // Poll the contract until the re-registered tournament game ID appears, then
+  // adopt it into the store and this tournament's storage slot so
+  // effectiveGameId unlocks the submit button (and its auto-countdown).
+  // Safe to trust activeGame here: the poll only runs right after WE sent the
+  // registration tx, so the mapping points at our own new game.
   React.useEffect(() => {
     if (!isPollingGameId) return
     if (effectiveGameId && effectiveGameId !== 0n) {
@@ -396,13 +414,24 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       ticks++
       const res = await refetchTournamentGameId()
       const gid = res.data as bigint | undefined
+      if (gid && gid !== 0n) {
+        useGameStore.setState({ onChainGameId: gid, onChainStatus: 'registered' })
+        try {
+          const raw = localStorage.getItem(storageKey)
+          if (raw) {
+            const entry = JSON.parse(raw)
+            entry.gameId = gid.toString()
+            localStorage.setItem(storageKey, JSON.stringify(entry))
+          }
+        } catch {}
+      }
       if ((gid && gid !== 0n) || ticks > 30) {
         clearInterval(timer)
         setIsPollingGameId(false)
       }
     }, 2000)
     return () => clearInterval(timer)
-  }, [isPollingGameId, effectiveGameId, refetchTournamentGameId])
+  }, [isPollingGameId, effectiveGameId, refetchTournamentGameId, storageKey])
 
   // Total stablecoin balance across all tokens (USD value)
   const totalStableUsd = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).reduce((sum, sym) => {
