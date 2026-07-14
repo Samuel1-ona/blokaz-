@@ -58,8 +58,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 }) => {
   const { address } = useAccount()
   // Each contract tracks its own activeGame mapping — use the right one per mode
-  const { gameId: classicActiveGameId, isLoading: isLoadingClassicGameId } =
-    useActiveGame(mode === 'classic' ? address : undefined)
+  const {
+    gameId: classicActiveGameId,
+    isLoading: isLoadingClassicGameId,
+    refetch: refetchClassicGameId,
+  } = useActiveGame(mode === 'classic' ? address : undefined)
   const {
     gameId: tournamentActiveGameId,
     isLoading: isLoadingTournamentGameId,
@@ -247,6 +250,14 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     return expectedHash === onChainHash
   }, [recoveredSeed, address, effectiveGameId, gameData, onChainHash])
 
+  // Classic game struct: [player, seedHash, score, startedAt, submittedAt, status]
+  // status: 0 = ACTIVE, 1 = SUBMITTED, 2 = REJECTED
+  const classicGameStatus = useMemo(() => {
+    if (mode !== 'classic' || !gameData) return null
+    const g = gameData as { status?: number } & readonly unknown[]
+    return Number(g.status ?? g[5] ?? 0)
+  }, [gameData, mode])
+
   const isLoading = isLoadingGameId || isLoadingContract
 
   const resetForNextGame = () => {
@@ -332,6 +343,18 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const isSyncing = onChainStatus === 'pending' || onChainStatus === 'syncing'
   const isAllSuccess = isSuccess || isToursSuccess
   const hasError = error || toursError
+  // A stored classic game the contract can never accept this run against:
+  // already SUBMITTED/REJECTED, or its seed commitment belongs to a different
+  // run (stale gameId carried over from a previous session via restore).
+  // Submitting against it reverts forever — the recovery is re-registering
+  // the same seed as a fresh game below.
+  const isStaleClassicGame =
+    mode === 'classic' &&
+    !!effectiveGameId &&
+    !!gameData &&
+    !!recoveredSeed &&
+    !isAllSuccess &&
+    (classicGameStatus !== 0 || !isSeedMatch)
   // Button is enabled as soon as we have a game ID — seed verification is
   // enforced by the contract. On MiniPay wagmi's isSuccess may never fire,
   // so we don't gate on isSeedMatch or onChainStatus here.
@@ -340,7 +363,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     !isAllSuccess &&
     !!gameSession &&
     !!recoveredSeed &&
-    !!effectiveGameId
+    !!effectiveGameId &&
+    !isStaleClassicGame
 
   // Human-readable reason when the submit button is blocked
   const submitBlockReason: string | null = (() => {
@@ -364,11 +388,16 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     error: tourRegError,
   } = useStartTournamentGame()
   const [isPollingGameId, setIsPollingGameId] = React.useState(false)
+  // Game id in place when registration was requested — the poll below adopts
+  // only a DIFFERENT id, so a stale classic game can't be re-adopted as "new".
+  const prevGameIdRef = React.useRef<bigint>(0n)
 
-  // True when the game was never registered on-chain — show a Register button
-  // so the player can fix it without leaving the game-over screen.
+  // True when the game was never registered on-chain, or its stored game id
+  // is unusable (stale classic game) — show a Register button so the player
+  // can fix it without leaving the game-over screen.
   const needsRegistration =
-    !effectiveGameId && !!recoveredSeed && !!gameSession && !isLoadingGameId &&
+    (!effectiveGameId || isStaleClassicGame) &&
+    !!recoveredSeed && !!gameSession && !isLoadingGameId &&
     (mode === 'classic' || isTournamentMode)
   const isRegistering2 =
     isRegisterPending || isRegisterConfirming ||
@@ -376,6 +405,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const handleRegisterGame = async () => {
     if (!recoveredSeed || !address) return
+    prevGameIdRef.current = effectiveGameId ?? 0n
     if (isTournamentMode && tournamentId !== null) {
       setSignerError(null)
       try {
@@ -400,7 +430,17 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         )
       }
     } else {
-      contractStartGame(recoveredSeed as `0x${string}`)
+      // The contract stores keccak256(seed ++ player) as the seedHash and
+      // submitScore re-derives it from the raw seed — committing the raw seed
+      // here would make the new game just as unsubmittable as the old one.
+      const seedHash = keccak256(
+        encodePacked(
+          ['bytes32', 'address'],
+          [recoveredSeed as `0x${string}`, address]
+        )
+      )
+      contractStartGame(seedHash)
+      setIsPollingGameId(true)
     }
   }
 
@@ -411,16 +451,24 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   // registration tx, so the mapping points at our own new game.
   React.useEffect(() => {
     if (!isPollingGameId) return
-    if (effectiveGameId && effectiveGameId !== 0n) {
+    if (
+      effectiveGameId &&
+      effectiveGameId !== 0n &&
+      effectiveGameId !== prevGameIdRef.current
+    ) {
       setIsPollingGameId(false)
       return
     }
     let ticks = 0
     const timer = setInterval(async () => {
       ticks++
-      const res = await refetchTournamentGameId()
+      const res =
+        mode === 'tournament'
+          ? await refetchTournamentGameId()
+          : await refetchClassicGameId()
       const gid = res.data as bigint | undefined
-      if (gid && gid !== 0n) {
+      const isNewGameId = !!gid && gid !== 0n && gid !== prevGameIdRef.current
+      if (isNewGameId) {
         useGameStore.setState({ onChainGameId: gid, onChainStatus: 'registered' })
         try {
           const raw = localStorage.getItem(storageKey)
@@ -430,14 +478,18 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             localStorage.setItem(storageKey, JSON.stringify(entry))
           }
         } catch {}
+        // Re-arm the auto-submit countdown — the original one was consumed
+        // (or skipped) while the game id was missing/stale.
+        autoSubmitTriggeredRef.current = false
+        setCountdown(5)
       }
-      if ((gid && gid !== 0n) || ticks > 30) {
+      if (isNewGameId || ticks > 30) {
         clearInterval(timer)
         setIsPollingGameId(false)
       }
     }, 2000)
     return () => clearInterval(timer)
-  }, [isPollingGameId, effectiveGameId, refetchTournamentGameId, storageKey])
+  }, [isPollingGameId, effectiveGameId, refetchTournamentGameId, refetchClassicGameId, storageKey, mode])
 
   // Total stablecoin balance across all tokens (USD value)
   const totalStableUsd = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).reduce((sum, sym) => {
@@ -1192,8 +1244,10 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 </div>
               )}
 
-              {/* Register game on-chain when the wallet prompt was missed at start */}
-              {needsRegistration && !hasError && (
+              {/* Register game on-chain when the wallet prompt was missed at
+                  start, or when the stored game id is unusable (stale classic
+                  game — keep showing it after failed submit attempts too) */}
+              {needsRegistration && (!hasError || isStaleClassicGame) && (
                 <div className="flex flex-col gap-2">
                   <div
                     className="border-[3px] border-ink px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em]"
@@ -1201,7 +1255,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   >
                     {isTournamentMode
                       ? 'Your run was never registered on-chain — register it now to save your score. Your run is safe.'
-                      : 'Game not registered on-chain — register it now to unlock score submission.'}
+                      : isStaleClassicGame
+                        ? 'Almost there — this run needs a fresh on-chain registration to save your score. Your run is safe.'
+                        : 'Game not registered on-chain — register it now to unlock score submission.'}
                   </div>
                   <button
                     onClick={handleRegisterGame}

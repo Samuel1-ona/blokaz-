@@ -1239,10 +1239,33 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // Detect a saved game the user can resume — either moves in snapshot OR a
   // stored seed (game was registered on-chain but player closed before playing).
-  const hasStoredGame = !gameSession && !!address && (() => {
+  const hasLocalStoredGame = !gameSession && !!address && (() => {
     const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
     return !!(stored?.snapshot?.moveHistory?.length || stored?.seed)
   })()
+
+  // localStorage is not the source of truth — it's wiped by SKIP & PLAY AGAIN,
+  // browser data clears, and MiniPay WebView eviction, while the server session
+  // survives all of those. Without this probe a finished-but-unsubmitted run
+  // (e.g. a score whose submission failed) becomes unreachable: the CONTINUE
+  // button never shows and the player is only offered a brand-new game.
+  const [serverGameAvailable, setServerGameAvailable] = useState(false)
+  useEffect(() => {
+    if (!address || gameSession || hasLocalStoredGame) {
+      setServerGameAvailable(false)
+      return
+    }
+    let cancelled = false
+    fetchServerSession(address).then((session) => {
+      if (cancelled) return
+      setServerGameAvailable(!!session?.moveHistory?.length)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [address, !!gameSession, hasLocalStoredGame])
+
+  const hasStoredGame = hasLocalStoredGame || (!gameSession && !!address && serverGameAvailable)
 
   const continueGame = async () => {
     if (!address || isContinuing) return
